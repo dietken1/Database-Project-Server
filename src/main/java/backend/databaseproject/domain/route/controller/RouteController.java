@@ -4,7 +4,7 @@ import backend.databaseproject.domain.route.dto.response.DronePositionResponse;
 import backend.databaseproject.domain.route.dto.response.RouteResponse;
 import backend.databaseproject.domain.route.service.DeliveryBatchService;
 import backend.databaseproject.domain.route.service.RouteService;
-import backend.databaseproject.global.common.BaseResponse;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -44,8 +44,8 @@ public class RouteController {
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "조회 성공",
-                            content = @Content(schema = @Schema(implementation = BaseResponse.class))
+                            description = "조회 성공"
+                            
                     ),
                     @ApiResponse(
                             responseCode = "404",
@@ -53,13 +53,13 @@ public class RouteController {
                     )
             }
     )
-    public BaseResponse<RouteResponse> getRoute(
+    public RouteResponse getRoute(
             @Parameter(name = "routeId", description = "경로 ID", required = true, example = "1")
             @PathVariable Long routeId
     ) {
         log.info("API 호출: GET /api/routes/{}", routeId);
         RouteResponse route = routeService.getRoute(routeId);
-        return BaseResponse.success(route);
+        return route;
     }
 
     /**
@@ -77,8 +77,8 @@ public class RouteController {
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "조회 성공",
-                            content = @Content(schema = @Schema(implementation = BaseResponse.class))
+                            description = "조회 성공"
+                            
                     ),
                     @ApiResponse(
                             responseCode = "404",
@@ -86,13 +86,13 @@ public class RouteController {
                     )
             }
     )
-    public BaseResponse<DronePositionResponse> getCurrentPosition(
+    public DronePositionResponse getCurrentPosition(
             @Parameter(name = "routeId", description = "경로 ID", required = true, example = "1")
             @PathVariable Long routeId
     ) {
         log.info("API 호출: GET /api/routes/{}/current-position", routeId);
         DronePositionResponse position = routeService.getCurrentPosition(routeId);
-        return BaseResponse.success(position);
+        return position;
     }
 
     /**
@@ -109,15 +109,15 @@ public class RouteController {
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "조회 성공",
-                            content = @Content(schema = @Schema(implementation = BaseResponse.class))
+                            description = "조회 성공"
+                            
                     )
             }
     )
-    public BaseResponse<List<RouteResponse>> getActiveRoutes() {
+    public List<RouteResponse> getActiveRoutes() {
         log.info("API 호출: GET /api/routes/active");
         List<RouteResponse> activeRoutes = routeService.getActiveRoutes();
-        return BaseResponse.success(activeRoutes);
+        return activeRoutes;
     }
 
     /**
@@ -136,8 +136,7 @@ public class RouteController {
             responses = {
                     @ApiResponse(
                             responseCode = "200",
-                            description = "배송 시작 성공",
-                            content = @Content(schema = @Schema(implementation = BaseResponse.class))
+                            description = "배송 시작 성공"
                     ),
                     @ApiResponse(
                             responseCode = "400",
@@ -145,7 +144,7 @@ public class RouteController {
                     )
             }
     )
-    public BaseResponse<String> startDelivery() {
+    public String startDelivery() {
         log.info("API 호출: POST /api/routes/start-delivery");
         log.info("========================================");
         log.info("매니저가 수동 배송 시작 요청");
@@ -158,7 +157,7 @@ public class RouteController {
             log.info("수동 배송 시작 완료");
             log.info("========================================");
 
-            return BaseResponse.success("배송이 성공적으로 시작되었습니다.");
+            return "배송이 성공적으로 시작되었습니다.";
         } catch (Exception e) {
             log.error("수동 배송 시작 중 오류 발생", e);
             log.info("========================================");

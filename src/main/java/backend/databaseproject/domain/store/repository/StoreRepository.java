@@ -41,4 +41,10 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     List<Store> findStoresWithinRadius(@Param("lat") BigDecimal lat,
                                        @Param("lng") BigDecimal lng,
                                        @Param("radiusKm") BigDecimal radiusKm);
+
+    /**
+     * 매장명으로 활성화된 매장 검색 (부분 일치)
+     */
+    @Query("SELECT s FROM Store s WHERE s.isActive = true AND s.name LIKE %:name% ORDER BY s.name")
+    List<Store> findByNameContainingAndIsActiveTrue(@Param("name") String name);
 }

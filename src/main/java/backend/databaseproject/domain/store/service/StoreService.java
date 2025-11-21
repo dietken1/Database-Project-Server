@@ -1,6 +1,8 @@
 package backend.databaseproject.domain.store.service;
 
+import backend.databaseproject.domain.drone.repository.DroneRepository;
 import backend.databaseproject.domain.store.dto.response.CategoryResponse;
+import backend.databaseproject.domain.store.dto.response.DeliveryInfoResponse;
 import backend.databaseproject.domain.store.dto.response.ProductResponse;
 import backend.databaseproject.domain.store.dto.response.StoreResponse;
 import backend.databaseproject.domain.store.entity.Store;
@@ -28,6 +30,7 @@ public class StoreService {
 
     private final StoreRepository storeRepository;
     private final StoreProductRepository storeProductRepository;
+    private final DroneRepository droneRepository;
 
     /**
      * 사용자 위치 기반 주변 매장 조회
@@ -110,4 +113,82 @@ public class StoreService {
                 .map(ProductResponse::from)
                 .collect(Collectors.toList());
     }
+
+    /**
+     * 매장명으로 매장 검색
+     *
+     * @param name 매장명 (부분 일치)
+     * @param lat  사용자 위도 (거리 계산용, optional)
+     * @param lng  사용자 경도 (거리 계산용, optional)
+     * @return 검색된 매장 목록
+     */
+    public List<StoreResponse> searchStoresByName(String name, BigDecimal lat, BigDecimal lng) {
+        List<Store> stores = storeRepository.findByNameContainingAndIsActiveTrue(name);
+
+        return stores.stream()
+                .map(store -> {
+                    if (lat != null && lng != null) {
+                        double distance = GeoUtils.calculateDistance(
+                                lat.doubleValue(),
+                                lng.doubleValue(),
+                                store.getLat().doubleValue(),
+                                store.getLng().doubleValue()
+                        );
+                        return StoreResponse.from(store, distance);
+                    } else {
+                        return StoreResponse.from(store);
+                    }
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 배송 정보 조회
+     * 프론트엔드에서 주문 전 검증에 필요한 정보 제공
+     *
+     * @param storeId 매장 ID
+     * @param userLat 사용자 위도 (optional)
+     * @param userLng 사용자 경도 (optional)
+     * @return 배송 정보
+     * @throws BaseException STORE_NOT_FOUND, STORE_NOT_ACTIVE
+     */
+    public DeliveryInfoResponse getDeliveryInfo(Long storeId, BigDecimal userLat, BigDecimal userLng) {
+        // 매장 존재 여부 확인
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new BaseException(ErrorCode.STORE_NOT_FOUND));
+
+        // 매장 활성화 여부 확인
+        if (!store.getIsActive()) {
+            throw new BaseException(ErrorCode.STORE_NOT_ACTIVE);
+        }
+
+        // 시스템 드론 최대 무게 조회
+        BigDecimal maxWeightKg = droneRepository.findMinMaxPayloadKg()
+                .orElse(BigDecimal.valueOf(5.0)); // 기본값 5kg
+
+        // 사용자 위치가 제공된 경우 거리 및 배송 가능 여부 계산
+        BigDecimal distanceKm = null;
+        Boolean isDeliverable = null;
+
+        if (userLat != null && userLng != null) {
+            double distance = GeoUtils.calculateDistance(
+                    store.getLat().doubleValue(),
+                    store.getLng().doubleValue(),
+                    userLat.doubleValue(),
+                    userLng.doubleValue()
+            );
+            distanceKm = BigDecimal.valueOf(distance);
+            isDeliverable = distance <= store.getDeliveryRadiusKm().doubleValue();
+        }
+
+        return DeliveryInfoResponse.of(
+                store.getStoreId(),
+                store.getName(),
+                store.getDeliveryRadiusKm(),
+                maxWeightKg,
+                isDeliverable,
+                distanceKm
+        );
+    }
+
 }

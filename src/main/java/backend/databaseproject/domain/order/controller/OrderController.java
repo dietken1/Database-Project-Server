@@ -1,9 +1,9 @@
 package backend.databaseproject.domain.order.controller;
 
 import backend.databaseproject.domain.order.dto.request.OrderCreateRequest;
+import backend.databaseproject.domain.order.dto.response.OrderCreateResponse;
 import backend.databaseproject.domain.order.dto.response.OrderResponse;
 import backend.databaseproject.domain.order.service.OrderService;
-import backend.databaseproject.global.common.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -31,17 +31,18 @@ public class OrderController {
     /**
      * 주문 생성
      * 장바구니 내용을 기반으로 배송 요청을 생성합니다.
+     * 생성된 주문의 ID만 반환하며, 상세 정보는 주문 조회 API로 확인할 수 있습니다.
      */
     @PostMapping
     @Operation(
             summary = "주문 생성",
-            description = "장바구니 내용을 기반으로 배송 요청을 생성합니다."
+            description = "장바구니 내용을 기반으로 배송 요청을 생성합니다. 생성된 주문 ID만 반환됩니다."
     )
     @ApiResponses({
             @ApiResponse(
-                    responseCode = "200",
+                    responseCode = "201",
                     description = "주문 생성 성공",
-                    content = @Content(schema = @Schema(implementation = BaseResponse.class))
+                    content = @Content(schema = @Schema(implementation = OrderCreateResponse.class))
             ),
             @ApiResponse(
                     responseCode = "400",
@@ -56,12 +57,12 @@ public class OrderController {
                     description = "서버 내부 오류"
             )
     })
-    public ResponseEntity<BaseResponse<OrderResponse>> createOrder(
+    public ResponseEntity<OrderCreateResponse> createOrder(
             @RequestBody @Valid OrderCreateRequest request
     ) {
-        OrderResponse orderResponse = orderService.createOrder(request);
+        OrderCreateResponse orderCreateResponse = orderService.createOrder(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(BaseResponse.success(orderResponse));
+                .body(orderCreateResponse);
     }
 
     /**
@@ -77,7 +78,7 @@ public class OrderController {
             @ApiResponse(
                     responseCode = "200",
                     description = "주문 조회 성공",
-                    content = @Content(schema = @Schema(implementation = BaseResponse.class))
+                    content = @Content(schema = @Schema(implementation = OrderResponse.class))
             ),
             @ApiResponse(
                     responseCode = "404",
@@ -88,12 +89,12 @@ public class OrderController {
                     description = "서버 내부 오류"
             )
     })
-    public ResponseEntity<BaseResponse<OrderResponse>> getOrder(
+    public ResponseEntity<OrderResponse> getOrder(
             @PathVariable("orderId")
             @Schema(description = "주문 ID", example = "1")
             Long requestId
     ) {
         OrderResponse orderResponse = orderService.getOrder(requestId);
-        return ResponseEntity.ok(BaseResponse.success(orderResponse));
+        return ResponseEntity.ok(orderResponse);
     }
 }

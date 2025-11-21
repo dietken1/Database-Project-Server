@@ -2,8 +2,10 @@ package backend.databaseproject.domain.order.service;
 
 import backend.databaseproject.domain.customer.entity.Customer;
 import backend.databaseproject.domain.customer.repository.CustomerRepository;
+import backend.databaseproject.domain.drone.repository.DroneRepository;
 import backend.databaseproject.domain.order.dto.request.OrderCreateRequest;
 import backend.databaseproject.domain.order.dto.request.OrderItemRequest;
+import backend.databaseproject.domain.order.dto.response.OrderCreateResponse;
 import backend.databaseproject.domain.order.dto.response.OrderResponse;
 import backend.databaseproject.domain.order.entity.DeliveryRequest;
 import backend.databaseproject.domain.order.entity.RequestItem;
@@ -17,6 +19,7 @@ import backend.databaseproject.domain.store.repository.StoreProductRepository;
 import backend.databaseproject.domain.store.repository.StoreRepository;
 import backend.databaseproject.global.common.BaseException;
 import backend.databaseproject.global.common.ErrorCode;
+import backend.databaseproject.global.util.GeoUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +42,7 @@ public class OrderService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final StoreProductRepository storeProductRepository;
+    private final DroneRepository droneRepository;
 
     /**
      * 주문 생성
@@ -50,13 +54,16 @@ public class OrderService {
      *    - StoreProduct 조회 (매장에서 판매하는 상품인지 확인)
      *    - 재고 확인 (부족하면 PRODUCT_OUT_OF_STOCK)
      *    - 최대 수량 확인 (초과하면 PRODUCT_EXCEED_MAX_QUANTITY)
-     * 6. totalWeightKg, totalAmount, itemCount 계산
-     * 7. DeliveryRequest 생성 (originLat/Lng는 Store, destLat/Lng는 Customer)
-     * 8. RequestItem들 생성하여 추가
-     * 9. 재고 감소 (storeProduct.decreaseStock(quantity))
-     * 10. 저장 후 OrderResponse 반환
+     *    - totalWeightKg, totalAmount, itemCount 계산
+     * 6. 드론 최대 적재 무게 검증 (초과하면 ORDER_TOTAL_WEIGHT_EXCEEDED)
+     * 7. 배송 가능 거리 검증 (초과하면 STORE_OUT_OF_DELIVERY_RANGE)
+     * 8. DeliveryRequest 생성 (originLat/Lng는 Store, destLat/Lng는 Customer)
+     * 9. DeliveryRequest 저장
+     * 10. RequestItem들 생성하여 추가
+     * 11. 재고 감소 (storeProduct.decreaseStock(quantity))
+     * 12. 저장 후 OrderCreateResponse 반환 (requestId만 포함)
      */
-    public OrderResponse createOrder(OrderCreateRequest request) {
+    public OrderCreateResponse createOrder(OrderCreateRequest request) {
         // 1. Store 조회
         Store store = storeRepository.findById(request.getStoreId())
                 .orElseThrow(() -> new BaseException(ErrorCode.STORE_NOT_FOUND));
@@ -110,7 +117,25 @@ public class OrderService {
             totalWeightKg = totalWeightKg.add(itemWeightKg);
         }
 
-        // 6. DeliveryRequest 생성
+        // 6. 드론 최대 적재 무게 검증
+        BigDecimal maxPayloadKg = droneRepository.findMinMaxPayloadKg()
+                .orElse(BigDecimal.valueOf(5.0)); // 기본값 5kg
+        if (totalWeightKg.compareTo(maxPayloadKg) > 0) {
+            throw new BaseException(ErrorCode.ORDER_TOTAL_WEIGHT_EXCEEDED);
+        }
+
+        // 7. 배송 가능 거리 검증
+        double distanceKm = GeoUtils.calculateDistance(
+                store.getLat().doubleValue(),
+                store.getLng().doubleValue(),
+                customer.getLat().doubleValue(),
+                customer.getLng().doubleValue()
+        );
+        if (distanceKm > store.getDeliveryRadiusKm().doubleValue()) {
+            throw new BaseException(ErrorCode.STORE_OUT_OF_DELIVERY_RANGE);
+        }
+
+        // 8. DeliveryRequest 생성
         // originLat/Lng는 Store, destLat/Lng는 Customer
         DeliveryRequest deliveryRequest = DeliveryRequest.builder()
                 .store(store)
@@ -125,10 +150,10 @@ public class OrderService {
                 .note(request.getNote())
                 .build();
 
-        // 7. DeliveryRequest 저장
+        // 9. DeliveryRequest 저장
         DeliveryRequest savedDeliveryRequest = deliveryRequestRepository.save(deliveryRequest);
 
-        // 8. RequestItem들 생성 및 추가
+        // 10. RequestItem들 생성 및 추가
         for (OrderItemRequest itemRequest : request.getItems()) {
             Product product = productRepository.findById(itemRequest.getProductId())
                     .orElseThrow(() -> new BaseException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -148,12 +173,12 @@ public class OrderService {
             requestItemRepository.save(requestItem);
             savedDeliveryRequest.addRequestItem(requestItem);
 
-            // 9. 재고 감소
+            // 11. 재고 감소
             storeProduct.decreaseStock(itemRequest.getQuantity());
         }
 
-        // 10. 저장 후 OrderResponse 반환
-        return OrderResponse.from(savedDeliveryRequest);
+        // 12. 저장 후 OrderCreateResponse 반환 (requestId만 포함)
+        return OrderCreateResponse.of(savedDeliveryRequest.getRequestId());
     }
 
     /**
