@@ -3,13 +3,13 @@ package backend.databaseproject.domain.route.service;
 import backend.databaseproject.domain.drone.entity.Drone;
 import backend.databaseproject.domain.drone.entity.DroneStatus;
 import backend.databaseproject.domain.drone.repository.DroneRepository;
-import backend.databaseproject.domain.order.entity.DeliveryRequest;
-import backend.databaseproject.domain.order.entity.DeliveryStatus;
-import backend.databaseproject.domain.order.repository.DeliveryRequestRepository;
+import backend.databaseproject.domain.order.entity.Order;
+import backend.databaseproject.domain.order.entity.OrderStatus;
+import backend.databaseproject.domain.order.repository.OrderRepository;
 import backend.databaseproject.domain.route.entity.*;
 import backend.databaseproject.domain.route.repository.RouteRepository;
 import backend.databaseproject.domain.route.repository.RouteStopRepository;
-import backend.databaseproject.domain.route.repository.RouteStopRequestRepository;
+import backend.databaseproject.domain.route.repository.RouteStopOrderRepository;
 import backend.databaseproject.domain.store.entity.Store;
 import backend.databaseproject.domain.store.repository.StoreRepository;
 import backend.databaseproject.global.util.GeoUtils;
@@ -34,11 +34,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DeliveryBatchService {
 
-    private final DeliveryRequestRepository deliveryRequestRepository;
+    private final OrderRepository orderRepository;
     private final DroneRepository droneRepository;
     private final RouteRepository routeRepository;
     private final RouteStopRepository routeStopRepository;
-    private final RouteStopRequestRepository routeStopRequestRepository;
+    private final RouteStopOrderRepository routeStopOrderRepository;
     private final StoreRepository storeRepository;
     private final RouteOptimizerService routeOptimizerService;
     private final DroneSimulatorService droneSimulatorService;
@@ -55,30 +55,30 @@ public class DeliveryBatchService {
         log.info("=== 배송 배치 처리 시작 ===");
 
         try {
-            // 1. CREATED 상태의 DeliveryRequest들을 조회
-            List<DeliveryRequest> pendingRequests = deliveryRequestRepository
-                    .findPendingRequestsWithStoreAndCustomer(DeliveryStatus.CREATED);
+            // 1. CREATED 상태의 Order들을 조회
+            List<Order> pendingOrders = orderRepository
+                    .findPendingOrdersWithStoreAndCustomer(OrderStatus.CREATED);
 
-            if (pendingRequests.isEmpty()) {
+            if (pendingOrders.isEmpty()) {
                 log.info("처리할 배송 요청이 없습니다.");
                 return;
             }
 
-            log.info("대기 중인 배송 요청: {}건", pendingRequests.size());
+            log.info("대기 중인 배송 요청: {}건", pendingOrders.size());
 
             // 2. storeId별로 그룹화
-            Map<Long, List<DeliveryRequest>> requestsByStore = pendingRequests.stream()
-                    .collect(Collectors.groupingBy(req -> req.getStore().getStoreId()));
+            Map<Long, List<Order>> ordersByStore = pendingOrders.stream()
+                    .collect(Collectors.groupingBy(order -> order.getStore().getStoreId()));
 
-            log.info("매장별 그룹: {}개 매장", requestsByStore.size());
+            log.info("매장별 그룹: {}개 매장", ordersByStore.size());
 
             // 3. 각 그룹별로 처리
             int processedCount = 0;
-            for (Map.Entry<Long, List<DeliveryRequest>> entry : requestsByStore.entrySet()) {
+            for (Map.Entry<Long, List<Order>> entry : ordersByStore.entrySet()) {
                 Long storeId = entry.getKey();
-                List<DeliveryRequest> requests = entry.getValue();
+                List<Order> orders = entry.getValue();
 
-                log.info("매장 ID {} 처리 시작 - 배송 요청: {}건", storeId, requests.size());
+                log.info("매장 ID {} 처리 시작 - 배송 요청: {}건", storeId, orders.size());
 
                 // 대기 중인 드론 조회
                 Drone availableDrone = droneRepository.findFirstByStatus(DroneStatus.IDLE)
@@ -97,26 +97,26 @@ public class DeliveryBatchService {
                         .orElseThrow(() -> new IllegalArgumentException("Store not found: " + storeId));
 
                 // 경로 최적화
-                List<DeliveryRequest> optimizedRequests = routeOptimizerService.optimizeRoute(requests, store);
+                List<Order> optimizedOrders = routeOptimizerService.optimizeRoute(orders, store);
 
-                if (optimizedRequests.isEmpty()) {
+                if (optimizedOrders.isEmpty()) {
                     log.warn("최적화된 경로가 없습니다. 매장 ID {} 스킵", storeId);
                     continue;
                 }
 
                 // Route 생성
-                Route route = createRoute(availableDrone, store, optimizedRequests);
+                Route route = createRoute(availableDrone, store, optimizedOrders);
                 routeRepository.save(route);
                 log.info("Route 생성 완료 - RouteId: {}", route.getRouteId());
 
                 // RouteStop 생성
-                createRouteStops(route, store, optimizedRequests);
+                createRouteStops(route, store, optimizedOrders);
 
-                // DeliveryRequest 상태 변경
-                for (DeliveryRequest request : optimizedRequests) {
-                    request.assignDelivery();
+                // Order 상태 변경
+                for (Order order : optimizedOrders) {
+                    order.assignDelivery();
                 }
-                deliveryRequestRepository.saveAll(optimizedRequests);
+                orderRepository.saveAll(optimizedOrders);
 
                 // 드론 상태 변경
                 availableDrone.changeStatus(DroneStatus.IN_FLIGHT);
@@ -125,8 +125,8 @@ public class DeliveryBatchService {
                 // 비행 시뮬레이션 시작 (비동기)
                 droneSimulatorService.simulateFlight(route.getRouteId());
 
-                processedCount += optimizedRequests.size();
-                log.info("매장 ID {} 처리 완료 - {}건 배송 할당", storeId, optimizedRequests.size());
+                processedCount += optimizedOrders.size();
+                log.info("매장 ID {} 처리 완료 - {}건 배송 할당", storeId, optimizedOrders.size());
             }
 
             log.info("=== 배송 배치 처리 완료 - 총 {}건 처리 ===", processedCount);
@@ -140,20 +140,20 @@ public class DeliveryBatchService {
     /**
      * Route 엔티티 생성
      */
-    private Route createRoute(Drone drone, Store store, List<DeliveryRequest> requests) {
+    private Route createRoute(Drone drone, Store store, List<Order> orders) {
         // 총 거리 계산
-        BigDecimal totalDistance = calculateTotalDistance(store, requests);
+        BigDecimal totalDistance = calculateTotalDistance(store, orders);
 
         // 총 무게 계산
-        BigDecimal totalWeight = requests.stream()
-                .map(DeliveryRequest::getTotalWeightKg)
+        BigDecimal totalWeight = orders.stream()
+                .map(Order::getTotalWeightKg)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // 예상 소요 시간 계산 (거리 / 속도 + 각 stop당 지연 시간)
         double distanceKm = totalDistance.doubleValue();
         double travelTimeHours = distanceKm / DRONE_SPEED_KMH;
         int travelTimeMin = (int) Math.ceil(travelTimeHours * 60);
-        int stopDelayMin = (requests.size() + 2) * STOP_DELAY_MIN; // PICKUP + DROP들 + RETURN
+        int stopDelayMin = (orders.size() + 2) * STOP_DELAY_MIN; // PICKUP + DROP들 + RETURN
         int estimatedDuration = travelTimeMin + stopDelayMin;
 
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
@@ -173,7 +173,7 @@ public class DeliveryBatchService {
     /**
      * RouteStop들 생성
      */
-    private void createRouteStops(Route route, Store store, List<DeliveryRequest> requests) {
+    private void createRouteStops(Route route, Store store, List<Order> orders) {
         int sequence = 1;
 
         // 1. PICKUP (매장)
@@ -182,19 +182,19 @@ public class DeliveryBatchService {
         routeStopRepository.save(pickupStop);
 
         // 2. DROP들 (각 배송지)
-        for (DeliveryRequest request : requests) {
+        for (Order order : orders) {
             RouteStop dropStop = createRouteStop(route, sequence++, StopType.DROP,
-                    request.getCustomer().getName(), null, request.getCustomer(),
-                    request.getDestLat(), request.getDestLng(),
-                    request.getTotalWeightKg().negate()); // 배송으로 무게 감소
+                    order.getCustomer().getName(), null, order.getCustomer(),
+                    order.getDestLat(), order.getDestLng(),
+                    order.getTotalWeightKg().negate()); // 배송으로 무게 감소
             routeStopRepository.save(dropStop);
 
-            // RouteStopRequest 생성 (Stop과 Request 매핑)
-            RouteStopRequest routeStopRequest = RouteStopRequest.builder()
+            // RouteStopOrder 생성 (Stop과 Order 매핑)
+            RouteStopOrder routeStopOrder = RouteStopOrder.builder()
                     .routeStop(dropStop)
-                    .deliveryRequest(request)
+                    .order(order)
                     .build();
-            routeStopRequestRepository.save(routeStopRequest);
+            routeStopOrderRepository.save(routeStopOrder);
         }
 
         // 3. RETURN (매장으로 귀환)
@@ -225,20 +225,20 @@ public class DeliveryBatchService {
     /**
      * 총 거리 계산 (매장 -> 배송지들 -> 매장)
      */
-    private BigDecimal calculateTotalDistance(Store store, List<DeliveryRequest> requests) {
+    private BigDecimal calculateTotalDistance(Store store, List<Order> orders) {
         double totalDistance = 0.0;
         BigDecimal currentLat = store.getLat();
         BigDecimal currentLng = store.getLng();
 
         // 매장에서 각 배송지까지
-        for (DeliveryRequest request : requests) {
+        for (Order order : orders) {
             double distance = GeoUtils.calculateDistance(
                     currentLat.doubleValue(), currentLng.doubleValue(),
-                    request.getDestLat().doubleValue(), request.getDestLng().doubleValue()
+                    order.getDestLat().doubleValue(), order.getDestLng().doubleValue()
             );
             totalDistance += distance;
-            currentLat = request.getDestLat();
-            currentLng = request.getDestLng();
+            currentLat = order.getDestLat();
+            currentLng = order.getDestLng();
         }
 
         // 마지막 배송지에서 매장으로 귀환

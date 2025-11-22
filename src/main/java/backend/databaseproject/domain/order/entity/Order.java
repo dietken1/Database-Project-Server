@@ -14,18 +14,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 배송 요청(주문) 엔티티
+ * 주문 엔티티
  */
 @Entity
-@Table(name = "delivery_request")
+@Table(name = "orders")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class DeliveryRequest {
+public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "request_id")
-    private Long requestId;
+    @Column(name = "order_id")
+    private Long orderId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "store_id", nullable = false)
@@ -58,7 +58,7 @@ public class DeliveryRequest {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private DeliveryStatus status = DeliveryStatus.CREATED;
+    private OrderStatus status = OrderStatus.CREATED;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -69,11 +69,17 @@ public class DeliveryRequest {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    @Column(name = "canceled_at")
+    private LocalDateTime canceledAt;
+
+    @Column(name = "failure_reason", columnDefinition = "TEXT")
+    private String failureReason;
+
     @Column(columnDefinition = "TEXT")
     private String note;
 
-    @OneToMany(mappedBy = "deliveryRequest", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RequestItem> requestItems = new ArrayList<>();
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItem> orderItems = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {
@@ -83,11 +89,11 @@ public class DeliveryRequest {
     }
 
     @Builder
-    public DeliveryRequest(Store store, Customer customer,
-                           BigDecimal originLat, BigDecimal originLng,
-                           BigDecimal destLat, BigDecimal destLng,
-                           BigDecimal totalWeightKg, Integer totalAmount, Integer itemCount,
-                           String note) {
+    public Order(Store store, Customer customer,
+                 BigDecimal originLat, BigDecimal originLng,
+                 BigDecimal destLat, BigDecimal destLng,
+                 BigDecimal totalWeightKg, Integer totalAmount, Integer itemCount,
+                 String note) {
         this.store = store;
         this.customer = customer;
         this.originLat = originLat;
@@ -97,23 +103,23 @@ public class DeliveryRequest {
         this.totalWeightKg = totalWeightKg;
         this.totalAmount = totalAmount;
         this.itemCount = itemCount;
-        this.status = DeliveryStatus.CREATED;
+        this.status = OrderStatus.CREATED;
         this.note = note;
     }
 
     /**
      * 주문 항목 추가
      */
-    public void addRequestItem(RequestItem requestItem) {
-        this.requestItems.add(requestItem);
-        requestItem.setDeliveryRequest(this);
+    public void addOrderItem(OrderItem orderItem) {
+        this.orderItems.add(orderItem);
+        orderItem.setOrder(this);
     }
 
     /**
      * 배송 할당
      */
     public void assignDelivery() {
-        this.status = DeliveryStatus.ASSIGNED;
+        this.status = OrderStatus.ASSIGNED;
         this.assignedAt = LocalDateTime.now();
     }
 
@@ -121,7 +127,7 @@ public class DeliveryRequest {
      * 배송 완료
      */
     public void completeDelivery() {
-        this.status = DeliveryStatus.FULFILLED;
+        this.status = OrderStatus.FULFILLED;
         this.completedAt = LocalDateTime.now();
     }
 
@@ -129,6 +135,15 @@ public class DeliveryRequest {
      * 주문 취소
      */
     public void cancel() {
-        this.status = DeliveryStatus.CANCELED;
+        this.status = OrderStatus.CANCELED;
+        this.canceledAt = LocalDateTime.now();
+    }
+
+    /**
+     * 배송 실패
+     */
+    public void fail(String reason) {
+        this.status = OrderStatus.FAILED;
+        this.failureReason = reason;
     }
 }

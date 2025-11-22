@@ -100,7 +100,7 @@ http://localhost:8080/api
 **Response (201 Created)**
 ```json
 {
-  "requestId": 1
+  "orderId": 1
 }
 ```
 
@@ -108,7 +108,7 @@ http://localhost:8080/api
 
 | 필드 | 타입 | 설명 | 예시 |
 |------|------|------|------|
-| requestId | Long | 생성된 주문 ID | 1 |
+| orderId | Long | 생성된 주문 ID | 1 |
 
 > **참고**: 주문 상세 정보(총 금액, 항목 목록 등)는 `GET /api/orders/{orderId}` API로 조회할 수 있습니다.
 
@@ -141,27 +141,21 @@ http://localhost:8080/api
 **Response (200 OK)**
 ```json
 {
-  "requestId": 1,
+  "orderId": 1,
   "storeId": 1,
   "storeName": "편의점A",
-  "customerId": 1,
-  "customerName": "김철수",
-  "customerAddress": "서울시 강남구 테헤란로 123",
-  "totalWeightKg": 1.500,
   "totalAmount": 15000,
-  "itemCount": 3,
   "status": "FULFILLED",
   "createdAt": "2024-01-15T14:00:00",
   "assignedAt": "2024-01-15T14:10:00",
   "completedAt": "2024-01-15T14:45:00",
   "items": [
     {
-      "requestItemId": 1,
+      "orderItemId": 1,
       "productId": 1,
       "productName": "아메리카노",
       "quantity": 2,
       "unitPrice": 3000,
-      "unitWeightKg": 0.300,
       "subtotal": 6000
     }
   ],
@@ -176,10 +170,43 @@ http://localhost:8080/api
 |------|------|------|------|------|
 | routeId | Long | X | 배송 경로 ID (배송 할당 후 드론 위치 추적에 사용) | 5 |
 
+**Response 필드 설명**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| orderId | Long | O | 주문 ID | 1 |
+| storeId | Long | O | 매장 ID | 1 |
+| storeName | String | O | 매장명 | "편의점A" |
+| totalAmount | Integer | O | 총 금액 (원) | 15000 |
+| status | String | O | 주문 상태 (CREATED, ASSIGNED, FULFILLED, CANCELED, FAILED) | "FULFILLED" |
+| createdAt | DateTime | O | 주문 생성 시간 | "2024-01-15T14:00:00" |
+| assignedAt | DateTime | X | 배송 할당 시간 | "2024-01-15T14:10:00" |
+| completedAt | DateTime | X | 배송 완료 시간 | "2024-01-15T14:45:00" |
+| items | Array | O | 주문 항목 목록 | - |
+| items[].orderItemId | Long | O | 주문 항목 ID | 1 |
+| items[].productId | Long | O | 상품 ID | 1 |
+| items[].productName | String | O | 상품명 | "아메리카노" |
+| items[].quantity | Integer | O | 주문 수량 | 2 |
+| items[].unitPrice | Integer | O | 단가 (원) | 3000 |
+| items[].subtotal | Integer | O | 소계 (원) | 6000 |
+| note | String | X | 주문 메모 | "조심스럽게 배송해주세요." |
+| routeId | Long | X | 배송 경로 ID (배송 할당 후 드론 추적에 사용) | 5 |
+
 **배송 상태 확인 방법**
 - `status` 필드 확인: `CREATED` (대기중) → `ASSIGNED` (배송중) → `FULFILLED` (완료)
 - `completedAt` 필드가 null이 아니면 배송 완료
 - `routeId`가 null이 아니면 배송이 할당된 상태 (드론 추적 가능)
+
+**WebSocket 실시간 알림**
+- 주문 완료 시 `/topic/order/{orderId}` 토픽으로 완료 알림이 전송됩니다
+- 클라이언트는 주문 생성 후 해당 토픽을 구독하여 배송 완료 알림을 받을 수 있습니다
+```javascript
+stompClient.subscribe('/topic/order/1', (message) => {
+  const data = JSON.parse(message.body);
+  // { orderId: 1, status: "FULFILLED", message: "배송이 완료되었습니다!", completedAt: "..." }
+  showToast(data.message); // 토스트 메시지 표시
+});
+```
 
 **Error Responses**
 - `404 Not Found`: 주문을 찾을 수 없음
@@ -189,20 +216,28 @@ http://localhost:8080/api
 
 ## 2. 매장 (Store) API
 
-### 2.1 주변 매장 조회
+### 2.1 배달 가능한 매장 조회
 
 **GET** `/stores`
 
-사용자 위치를 기반으로 지정된 반경 내의 활성화된 매장 목록을 조회합니다.
-**모든 매장 조회는 이 엔드포인트를 사용하며, 기본 반경 10km 내의 매장을 제공합니다.**
+사용자 위치를 기반으로 **배달 가능한** 매장 목록을 조회합니다.
+각 매장은 자체적으로 배달 가능 거리(`deliveryRadiusKm`)를 가지고 있으며, 사용자 위치가 해당 거리 내에 있는 매장만 반환됩니다.
 
 **Query Parameters**
 
-| 필드 | 타입 | 필수 | 설명 | 예시 | 기본값 |
-|------|------|------|------|------|--------|
-| lat | BigDecimal | O | 사용자 위도 | 37.4979 | - |
-| lng | BigDecimal | O | 사용자 경도 | 127.0276 | - |
-| radius | BigDecimal | X | 검색 반경 (km) | 10.0 | 10.0 |
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| lat | BigDecimal | O | 사용자 위도 | 37.4979 |
+| lng | BigDecimal | O | 사용자 경도 | 127.0276 |
+
+> **동작 방식**:
+> - 각 매장의 `deliveryRadiusKm` 내에 사용자가 있는지 확인
+> - 배달 가능한 매장만 거리순으로 정렬하여 반환
+> - 성능 최적화를 위해 내부적으로 최대 50km 반경 내에서만 검색
+>
+> **예시**:
+> - 사용자 위치에서 1.5km 떨어진 매장A (deliveryRadiusKm: 2.0km) → ✅ 반환됨
+> - 사용자 위치에서 3.0km 떨어진 매장B (deliveryRadiusKm: 2.0km) → ❌ 배달 불가로 제외됨
 
 **Response (200 OK)**
 ```json
@@ -230,15 +265,18 @@ http://localhost:8080/api
 
 **GET** `/stores/search`
 
-매장명으로 매장을 검색합니다 (부분 일치). 사용자 위치 정보를 제공하면 거리도 함께 반환합니다.
+매장명으로 매장을 검색합니다 (부분 일치).
+사용자 위치 정보를 제공하면 거리를 계산하고, **각 매장의 배달 가능 거리 내에 있는 매장만** 반환합니다.
 
 **Query Parameters**
 
 | 필드 | 타입 | 필수 | 설명 | 예시 |
 |------|------|------|------|------|
 | name | String | O | 매장명 (부분 일치) | "편의점" |
-| lat | BigDecimal | X | 사용자 위도 (거리 계산용) | 37.4979 |
-| lng | BigDecimal | X | 사용자 경도 (거리 계산용) | 127.0276 |
+| lat | BigDecimal | X | 사용자 위도 (거리 계산 및 배달 가능 여부 필터링용) | 37.4979 |
+| lng | BigDecimal | X | 사용자 경도 (거리 계산 및 배달 가능 여부 필터링용) | 127.0276 |
+
+> **참고**: `lat`/`lng`를 제공하지 않으면 모든 검색 결과가 반환되지만, 제공하면 배달 가능한 매장만 필터링됩니다.
 
 **Response (200 OK)**
 ```json
@@ -1245,12 +1283,22 @@ public void simulateFlight(Long routeId) {
 
 ---
 
-**문서 버전**: 5.0
-**최종 수정일**: 2025-11-21
+**문서 버전**: 6.0
+**최종 수정일**: 2025-11-22
 **작성자**: Backend Development Team
 
 **변경 이력**
-- v5.0 (2025-11-21): 주문 검증 로직 추가 및 배송 정보 API 신규 추가 ⭐
+- v6.0 (2025-11-22): 치명적 버그 수정 및 용어 통일, 응답 최적화 ⭐⭐⭐
+  - **치명적 버그 수정**: 주문 완료 로직 추가 (배송 완료 시 주문 상태가 FULFILLED로 변경됨)
+  - **WebSocket 배송 완료 알림 추가**: `/topic/order/{orderId}` 토픽으로 실시간 완료 알림 전송
+  - **용어 통일**: `requestId` → `orderId`, `requestItemId` → `orderItemId`
+  - **DB 테이블 이름 변경**: `delivery_request` → `orders`, `request_item` → `order_item`, `route_stop_request` → `route_stop_order`
+  - **응답 데이터 최적화**: OrderResponse에서 불필요한 필드 제거 (customerName, customerAddress, totalWeightKg, itemCount, unitWeightKg)
+  - **DB 스키마 개선**: `canceled_at`, `failure_reason` 필드 추가
+  - **매장 조회 로직 개선**:
+    - 각 매장의 배달 가능 거리(`deliveryRadiusKm`) 내에 사용자가 있는 매장만 반환
+    - `radius` 파라미터 제거 (각 매장의 배달 가능 거리만 체크)
+- v5.0 (2025-11-21): 주문 검증 로직 추가 및 배송 정보 API 신규 추가
   - **배송 정보 조회 API 추가**: `GET /api/stores/{storeId}/delivery-info`
   - 주문 생성 시 **드론 최대 적재 무게 검증** 추가 (초과 시 `ORDER_TOTAL_WEIGHT_EXCEEDED`)
   - 주문 생성 시 **배송 가능 거리 검증** 추가 (초과 시 `STORE_OUT_OF_DELIVERY_RANGE`)
@@ -1259,6 +1307,6 @@ public void simulateFlight(Long routeId) {
   - 전체 매장 조회 API 제거 → 주변 매장 조회로 통합 (기본 반경 10km)
   - Product API 전체 제거 (상품 조회는 매장 선택 후 진행)
   - 매장 상품 조회 API: 카테고리 파라미터 선택적 제공으로 전체/카테고리별 조회 지원
-- v3.0 (2025-11-21): RESTful 응답 형식 적용, 주문 생성 응답 간소화 (requestId만 반환)
+- v3.0 (2025-11-21): RESTful 응답 형식 적용, 주문 생성 응답 간소화 (orderId만 반환)
 - v2.0 (2024-01-15): 추가 API 구현 (매장 검색, 전체 상품 조회 등)
 - v1.0 (2024-01-10): 초기 버전

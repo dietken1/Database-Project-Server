@@ -1,5 +1,7 @@
 package backend.databaseproject.domain.route.service;
 
+import backend.databaseproject.domain.order.entity.Order;
+import backend.databaseproject.domain.order.repository.OrderRepository;
 import backend.databaseproject.domain.route.entity.*;
 import backend.databaseproject.domain.route.repository.FlightLogRepository;
 import backend.databaseproject.domain.route.repository.RoutePositionRepository;
@@ -34,6 +36,7 @@ public class DroneSimulatorService {
     private final RouteStopRepository routeStopRepository;
     private final RoutePositionRepository routePositionRepository;
     private final FlightLogRepository flightLogRepository;
+    private final OrderRepository orderRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     private static final int UPDATE_INTERVAL_MS = 2000; // 2초마다 업데이트
@@ -162,6 +165,30 @@ public class DroneSimulatorService {
                     Thread.sleep(3000); // 3초 대기
                     currentStop.depart();
                     routeStopRepository.save(currentStop);
+
+                    // 이 정류장과 연결된 주문들을 완료 처리
+                    List<RouteStopOrder> routeStopOrders = currentStop.getRouteStopOrders();
+                    for (RouteStopOrder routeStopOrder : routeStopOrders) {
+                        Order order = routeStopOrder.getOrder();
+                        order.completeDelivery();
+                        orderRepository.save(order);
+
+                        log.info("주문 완료 처리 - OrderId: {}, Customer: {}",
+                                order.getOrderId(), order.getCustomer().getName());
+
+                        // WebSocket으로 배송 완료 알림 전송
+                        Map<String, Object> completionData = new HashMap<>();
+                        completionData.put("orderId", order.getOrderId());
+                        completionData.put("status", "FULFILLED");
+                        completionData.put("message", "배송이 완료되었습니다!");
+                        completionData.put("completedAt", LocalDateTime.now());
+                        messagingTemplate.convertAndSend(
+                                "/topic/order/" + order.getOrderId(),
+                                completionData
+                        );
+
+                        log.info("배송 완료 알림 전송 - OrderId: {}", order.getOrderId());
+                    }
                 }
             }
 

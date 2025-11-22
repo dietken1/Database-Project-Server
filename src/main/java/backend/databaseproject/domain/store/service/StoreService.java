@@ -33,28 +33,36 @@ public class StoreService {
     private final DroneRepository droneRepository;
 
     /**
-     * 사용자 위치 기반 주변 매장 조회
+     * 사용자 위치 기반 배달 가능한 매장 조회
+     * 각 매장의 배달 가능 거리(deliveryRadiusKm) 내에 사용자가 있는 매장만 반환합니다.
      *
-     * @param lat      사용자 위도
-     * @param lng      사용자 경도
-     * @param radiusKm 검색 반경 (km)
-     * @return 주변 매장 목록
+     * @param lat 사용자 위도
+     * @param lng 사용자 경도
+     * @return 배달 가능한 매장 목록 (거리순 정렬)
      */
-    public List<StoreResponse> getStoresNearby(BigDecimal lat, BigDecimal lng, BigDecimal radiusKm) {
-        // 데이터베이스에서 반경 내의 활성 매장 조회
-        List<Store> stores = storeRepository.findStoresWithinRadius(lat, lng, radiusKm);
+    public List<StoreResponse> getStoresNearby(BigDecimal lat, BigDecimal lng) {
+        // 성능 최적화를 위해 합리적인 최대 반경(50km) 내의 활성 매장만 조회
+        BigDecimal maxRadiusKm = BigDecimal.valueOf(50.0);
+        List<Store> stores = storeRepository.findStoresWithinRadius(lat, lng, maxRadiusKm);
 
-        // 각 매장의 거리를 계산하여 DTO로 변환
+        // 각 매장의 거리를 계산하고, 매장의 배달 가능 거리 내에 있는 매장만 필터링
         return stores.stream()
                 .map(store -> {
-                    double distance = GeoUtils.calculateDistance(
+                    double distanceKm = GeoUtils.calculateDistance(
                             lat.doubleValue(),
                             lng.doubleValue(),
                             store.getLat().doubleValue(),
                             store.getLng().doubleValue()
                     );
-                    return StoreResponse.from(store, distance);
+                    return new Object() {
+                        final Store storeData = store;
+                        final double distanceData = distanceKm;
+                    };
                 })
+                // 사용자가 매장의 배달 가능 거리 내에 있는 경우만 포함
+                .filter(obj -> obj.distanceData <= obj.storeData.getDeliveryRadiusKm().doubleValue())
+                .sorted((a, b) -> Double.compare(a.distanceData, b.distanceData))
+                .map(obj -> StoreResponse.from(obj.storeData, obj.distanceData))
                 .collect(Collectors.toList());
     }
 
@@ -116,30 +124,42 @@ public class StoreService {
 
     /**
      * 매장명으로 매장 검색
+     * 사용자 위치가 제공된 경우, 각 매장의 배달 가능 거리 내에 있는 매장만 반환합니다.
      *
      * @param name 매장명 (부분 일치)
      * @param lat  사용자 위도 (거리 계산용, optional)
      * @param lng  사용자 경도 (거리 계산용, optional)
-     * @return 검색된 매장 목록
+     * @return 검색된 매장 목록 (사용자 위치 제공 시 배달 가능한 매장만 포함)
      */
     public List<StoreResponse> searchStoresByName(String name, BigDecimal lat, BigDecimal lng) {
         List<Store> stores = storeRepository.findByNameContainingAndIsActiveTrue(name);
 
-        return stores.stream()
-                .map(store -> {
-                    if (lat != null && lng != null) {
-                        double distance = GeoUtils.calculateDistance(
+        if (lat != null && lng != null) {
+            // 사용자 위치가 제공된 경우: 거리 계산 + 배달 가능 거리 필터링
+            return stores.stream()
+                    .map(store -> {
+                        double distanceKm = GeoUtils.calculateDistance(
                                 lat.doubleValue(),
                                 lng.doubleValue(),
                                 store.getLat().doubleValue(),
                                 store.getLng().doubleValue()
                         );
-                        return StoreResponse.from(store, distance);
-                    } else {
-                        return StoreResponse.from(store);
-                    }
-                })
-                .collect(Collectors.toList());
+                        return new Object() {
+                            final Store storeData = store;
+                            final double distanceData = distanceKm;
+                        };
+                    })
+                    // 사용자가 매장의 배달 가능 거리 내에 있는 경우만 포함
+                    .filter(obj -> obj.distanceData <= obj.storeData.getDeliveryRadiusKm().doubleValue())
+                    .sorted((a, b) -> Double.compare(a.distanceData, b.distanceData))
+                    .map(obj -> StoreResponse.from(obj.storeData, obj.distanceData))
+                    .collect(Collectors.toList());
+        } else {
+            // 사용자 위치가 없는 경우: 모든 검색 결과 반환 (거리 정보 없음)
+            return stores.stream()
+                    .map(StoreResponse::from)
+                    .collect(Collectors.toList());
+        }
     }
 
     /**

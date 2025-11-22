@@ -30,17 +30,16 @@ public class StoreController {
 
     /**
      * 주변 매장 조회
-     * 사용자 위치를 기반으로 지정된 반경 내의 활성화된 매장 목록을 조회합니다.
+     * 사용자 위치를 기반으로 각 매장의 배달 가능 거리 내에 있는 활성화된 매장 목록을 조회합니다.
      *
-     * @param lat    사용자 위도 (필수)
-     * @param lng    사용자 경도 (필수)
-     * @param radius 검색 반경 (km, 선택, 기본값: 10.0)
-     * @return 주변 매장 목록
+     * @param lat 사용자 위도 (필수)
+     * @param lng 사용자 경도 (필수)
+     * @return 주변 매장 목록 (배달 가능한 매장만 반환)
      */
     @GetMapping
     @Operation(
             summary = "주변 매장 조회",
-            description = "사용자 위치 기반으로 주변 매장 목록을 조회합니다. 기본 반경 10km 내의 매장을 제공합니다.",
+            description = "사용자 위치 기반으로 배달 가능한 매장 목록을 조회합니다. 각 매장의 배달 가능 거리 내에 있는 매장만 반환됩니다.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
@@ -57,12 +56,9 @@ public class StoreController {
             @RequestParam BigDecimal lat,
 
             @Parameter(name = "lng", description = "경도", required = true, example = "127.0276")
-            @RequestParam BigDecimal lng,
-
-            @Parameter(name = "radius", description = "검색 반경 (km)", example = "10.0")
-            @RequestParam(required = false, defaultValue = "10.0") BigDecimal radius
+            @RequestParam BigDecimal lng
     ) {
-        List<StoreResponse> stores = storeService.getStoresNearby(lat, lng, radius);
+        List<StoreResponse> stores = storeService.getStoresNearby(lat, lng);
         return stores;
     }
 

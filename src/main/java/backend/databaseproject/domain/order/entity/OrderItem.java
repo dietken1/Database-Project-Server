@@ -13,19 +13,19 @@ import java.math.BigDecimal;
  * 주문 항목 엔티티
  */
 @Entity
-@Table(name = "request_item")
+@Table(name = "order_item")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class RequestItem {
+public class OrderItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "request_item_id")
-    private Long requestItemId;
+    @Column(name = "order_item_id")
+    private Long orderItemId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "request_id", nullable = false)
-    private DeliveryRequest deliveryRequest;
+    @JoinColumn(name = "order_id", nullable = false)
+    private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
@@ -41,9 +41,9 @@ public class RequestItem {
     private BigDecimal unitWeightKg;
 
     @Builder
-    public RequestItem(DeliveryRequest deliveryRequest, Product product,
-                       Integer quantity, Integer unitPrice, BigDecimal unitWeightKg) {
-        this.deliveryRequest = deliveryRequest;
+    public OrderItem(Order order, Product product,
+                     Integer quantity, Integer unitPrice, BigDecimal unitWeightKg) {
+        this.order = order;
         this.product = product;
         this.quantity = quantity;
         this.unitPrice = unitPrice;
@@ -53,7 +53,7 @@ public class RequestItem {
     /**
      * 양방향 연관관계 설정용
      */
-    protected void setDeliveryRequest(DeliveryRequest deliveryRequest) {
-        this.deliveryRequest = deliveryRequest;
+    protected void setOrder(Order order) {
+        this.order = order;
     }
 }

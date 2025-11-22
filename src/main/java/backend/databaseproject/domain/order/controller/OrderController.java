@@ -92,9 +92,9 @@ public class OrderController {
     public ResponseEntity<OrderResponse> getOrder(
             @PathVariable("orderId")
             @Schema(description = "주문 ID", example = "1")
-            Long requestId
+            Long orderId
     ) {
-        OrderResponse orderResponse = orderService.getOrder(requestId);
+        OrderResponse orderResponse = orderService.getOrder(orderId);
         return ResponseEntity.ok(orderResponse);
     }
 }

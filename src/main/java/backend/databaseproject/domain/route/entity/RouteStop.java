@@ -78,7 +78,7 @@ public class RouteStop {
     private String note;
 
     @OneToMany(mappedBy = "routeStop", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RouteStopRequest> routeStopRequests = new ArrayList<>();
+    private List<RouteStopOrder> routeStopOrders = new ArrayList<>();
 
     @Builder
     public RouteStop(Route route, Integer stopSequence, StopType stopType, String name,
@@ -139,10 +139,10 @@ public class RouteStop {
     }
 
     /**
-     * 배송 요청 추가
+     * 주문 추가
      */
-    public void addRouteStopRequest(RouteStopRequest routeStopRequest) {
-        this.routeStopRequests.add(routeStopRequest);
-        routeStopRequest.setRouteStop(this);
+    public void addRouteStopOrder(RouteStopOrder routeStopOrder) {
+        this.routeStopOrders.add(routeStopOrder);
+        routeStopOrder.setRouteStop(this);
     }
 }

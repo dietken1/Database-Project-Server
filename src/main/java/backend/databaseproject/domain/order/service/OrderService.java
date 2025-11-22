@@ -7,13 +7,13 @@ import backend.databaseproject.domain.order.dto.request.OrderCreateRequest;
 import backend.databaseproject.domain.order.dto.request.OrderItemRequest;
 import backend.databaseproject.domain.order.dto.response.OrderCreateResponse;
 import backend.databaseproject.domain.order.dto.response.OrderResponse;
-import backend.databaseproject.domain.order.entity.DeliveryRequest;
-import backend.databaseproject.domain.order.entity.RequestItem;
-import backend.databaseproject.domain.order.repository.DeliveryRequestRepository;
-import backend.databaseproject.domain.order.repository.RequestItemRepository;
+import backend.databaseproject.domain.order.entity.Order;
+import backend.databaseproject.domain.order.entity.OrderItem;
+import backend.databaseproject.domain.order.repository.OrderRepository;
+import backend.databaseproject.domain.order.repository.OrderItemRepository;
 import backend.databaseproject.domain.product.entity.Product;
 import backend.databaseproject.domain.product.repository.ProductRepository;
-import backend.databaseproject.domain.route.repository.RouteStopRequestRepository;
+import backend.databaseproject.domain.route.repository.RouteStopOrderRepository;
 import backend.databaseproject.domain.store.entity.Store;
 import backend.databaseproject.domain.store.entity.StoreProduct;
 import backend.databaseproject.domain.store.repository.StoreProductRepository;
@@ -37,14 +37,14 @@ import java.util.List;
 @Transactional
 public class OrderService {
 
-    private final DeliveryRequestRepository deliveryRequestRepository;
-    private final RequestItemRepository requestItemRepository;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
     private final StoreRepository storeRepository;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final StoreProductRepository storeProductRepository;
     private final DroneRepository droneRepository;
-    private final RouteStopRequestRepository routeStopRequestRepository;
+    private final RouteStopOrderRepository routeStopOrderRepository;
 
     /**
      * 주문 생성
@@ -59,11 +59,11 @@ public class OrderService {
      *    - totalWeightKg, totalAmount, itemCount 계산
      * 6. 드론 최대 적재 무게 검증 (초과하면 ORDER_TOTAL_WEIGHT_EXCEEDED)
      * 7. 배송 가능 거리 검증 (초과하면 STORE_OUT_OF_DELIVERY_RANGE)
-     * 8. DeliveryRequest 생성 (originLat/Lng는 Store, destLat/Lng는 Customer)
-     * 9. DeliveryRequest 저장
-     * 10. RequestItem들 생성하여 추가
+     * 8. Order 생성 (originLat/Lng는 Store, destLat/Lng는 Customer)
+     * 9. Order 저장
+     * 10. OrderItem들 생성하여 추가
      * 11. 재고 감소 (storeProduct.decreaseStock(quantity))
-     * 12. 저장 후 OrderCreateResponse 반환 (requestId만 포함)
+     * 12. 저장 후 OrderCreateResponse 반환 (orderId만 포함)
      */
     public OrderCreateResponse createOrder(OrderCreateRequest request) {
         // 1. Store 조회
@@ -137,9 +137,9 @@ public class OrderService {
             throw new BaseException(ErrorCode.STORE_OUT_OF_DELIVERY_RANGE);
         }
 
-        // 8. DeliveryRequest 생성
+        // 8. Order 생성
         // originLat/Lng는 Store, destLat/Lng는 Customer
-        DeliveryRequest deliveryRequest = DeliveryRequest.builder()
+        Order order = Order.builder()
                 .store(store)
                 .customer(customer)
                 .originLat(store.getLat())
@@ -152,10 +152,10 @@ public class OrderService {
                 .note(request.getNote())
                 .build();
 
-        // 9. DeliveryRequest 저장
-        DeliveryRequest savedDeliveryRequest = deliveryRequestRepository.save(deliveryRequest);
+        // 9. Order 저장
+        Order savedOrder = orderRepository.save(order);
 
-        // 10. RequestItem들 생성 및 추가
+        // 10. OrderItem들 생성 및 추가
         for (OrderItemRequest itemRequest : request.getItems()) {
             Product product = productRepository.findById(itemRequest.getProductId())
                     .orElseThrow(() -> new BaseException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -164,40 +164,40 @@ public class OrderService {
                     new StoreProduct.StoreProductId(request.getStoreId(), itemRequest.getProductId())
             ).orElseThrow(() -> new BaseException(ErrorCode.PRODUCT_NOT_FOUND));
 
-            RequestItem requestItem = RequestItem.builder()
-                    .deliveryRequest(savedDeliveryRequest)
+            OrderItem orderItem = OrderItem.builder()
+                    .order(savedOrder)
                     .product(product)
                     .quantity(itemRequest.getQuantity())
                     .unitPrice(storeProduct.getPrice())
                     .unitWeightKg(product.getUnitWeightKg())
                     .build();
 
-            requestItemRepository.save(requestItem);
-            savedDeliveryRequest.addRequestItem(requestItem);
+            orderItemRepository.save(orderItem);
+            savedOrder.addOrderItem(orderItem);
 
             // 11. 재고 감소
             storeProduct.decreaseStock(itemRequest.getQuantity());
         }
 
-        // 12. 저장 후 OrderCreateResponse 반환 (requestId만 포함)
-        return OrderCreateResponse.of(savedDeliveryRequest.getRequestId());
+        // 12. 저장 후 OrderCreateResponse 반환 (orderId만 포함)
+        return OrderCreateResponse.of(savedOrder.getOrderId());
     }
 
     /**
      * 주문 조회
-     * DeliveryRequest 조회 (없으면 ORDER_NOT_FOUND)
-     * RequestItem들도 함께 fetch
+     * Order 조회 (없으면 ORDER_NOT_FOUND)
+     * OrderItem들도 함께 fetch
      * 배송이 할당된 경우 routeId도 함께 조회
      * OrderResponse로 변환하여 반환
      */
     @Transactional(readOnly = true)
-    public OrderResponse getOrder(Long requestId) {
-        DeliveryRequest deliveryRequest = deliveryRequestRepository.findById(requestId)
+    public OrderResponse getOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new BaseException(ErrorCode.ORDER_NOT_FOUND));
 
         // 배송 경로 ID 조회 (배송이 할당되지 않은 경우 null)
-        Long routeId = routeStopRequestRepository.findRouteIdByRequestId(requestId).orElse(null);
+        Long routeId = routeStopOrderRepository.findRouteIdByOrderId(orderId).orElse(null);
 
-        return OrderResponse.from(deliveryRequest, routeId);
+        return OrderResponse.from(order, routeId);
     }
 }

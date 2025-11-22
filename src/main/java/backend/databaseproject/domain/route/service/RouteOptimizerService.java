@@ -1,6 +1,6 @@
 package backend.databaseproject.domain.route.service;
 
-import backend.databaseproject.domain.order.entity.DeliveryRequest;
+import backend.databaseproject.domain.order.entity.Order;
 import backend.databaseproject.domain.store.entity.Store;
 import backend.databaseproject.global.util.GeoUtils;
 import lombok.RequiredArgsConstructor;
@@ -25,25 +25,25 @@ public class RouteOptimizerService {
     /**
      * Nearest Neighbor 휴리스틱을 사용한 경로 최적화
      *
-     * @param requests 같은 매장의 배송 요청들
+     * @param orders 같은 매장의 배송 요청들
      * @param store    출발 매장
      * @return 최적화된 순서의 배송 요청 리스트
      */
-    public List<DeliveryRequest> optimizeRoute(List<DeliveryRequest> requests, Store store) {
-        if (requests == null || requests.isEmpty()) {
+    public List<Order> optimizeRoute(List<Order> orders, Store store) {
+        if (orders == null || orders.isEmpty()) {
             log.warn("최적화할 배송 요청이 없습니다.");
             return new ArrayList<>();
         }
 
-        if (requests.size() == 1) {
+        if (orders.size() == 1) {
             log.info("배송 요청이 1개이므로 최적화를 생략합니다.");
-            return new ArrayList<>(requests);
+            return new ArrayList<>(orders);
         }
 
-        log.info("경로 최적화 시작 - 매장: {}, 배송 요청 수: {}", store.getName(), requests.size());
+        log.info("경로 최적화 시작 - 매장: {}, 배송 요청 수: {}", store.getName(), orders.size());
 
-        List<DeliveryRequest> optimizedRoute = new ArrayList<>();
-        Set<DeliveryRequest> unvisited = new HashSet<>(requests);
+        List<Order> optimizedRoute = new ArrayList<>();
+        Set<Order> unvisited = new HashSet<>(orders);
 
         // 현재 위치 (매장에서 시작)
         BigDecimal currentLat = store.getLat();
@@ -51,21 +51,21 @@ public class RouteOptimizerService {
 
         // Nearest Neighbor 알고리즘 적용
         while (!unvisited.isEmpty()) {
-            DeliveryRequest nearest = null;
+            Order nearest = null;
             double minDistance = Double.MAX_VALUE;
 
             // 방문하지 않은 요청 중 가장 가까운 것 찾기
-            for (DeliveryRequest request : unvisited) {
+            for (Order order : unvisited) {
                 double distance = GeoUtils.calculateDistance(
                         currentLat.doubleValue(),
                         currentLng.doubleValue(),
-                        request.getDestLat().doubleValue(),
-                        request.getDestLng().doubleValue()
+                        order.getDestLat().doubleValue(),
+                        order.getDestLng().doubleValue()
                 );
 
                 if (distance < minDistance) {
                     minDistance = distance;
-                    nearest = request;
+                    nearest = order;
                 }
             }
 
@@ -78,8 +78,8 @@ public class RouteOptimizerService {
                 currentLat = nearest.getDestLat();
                 currentLng = nearest.getDestLng();
 
-                log.debug("다음 배송지 선택 - RequestId: {}, 거리: {:.2f}km",
-                         nearest.getRequestId(), minDistance);
+                log.debug("다음 배송지 선택 - OrderId: {}, 거리: {:.2f}km",
+                         nearest.getOrderId(), minDistance);
             }
         }
 
@@ -94,7 +94,7 @@ public class RouteOptimizerService {
     /**
      * 최적화된 경로의 총 거리 계산
      */
-    private double calculateTotalDistance(List<DeliveryRequest> route, Store store) {
+    private double calculateTotalDistance(List<Order> route, Store store) {
         if (route.isEmpty()) {
             return 0.0;
         }
@@ -104,16 +104,16 @@ public class RouteOptimizerService {
         BigDecimal currentLng = store.getLng();
 
         // 매장에서 첫 배송지까지
-        for (DeliveryRequest request : route) {
+        for (Order order : route) {
             double distance = GeoUtils.calculateDistance(
                     currentLat.doubleValue(),
                     currentLng.doubleValue(),
-                    request.getDestLat().doubleValue(),
-                    request.getDestLng().doubleValue()
+                    order.getDestLat().doubleValue(),
+                    order.getDestLng().doubleValue()
             );
             totalDistance += distance;
-            currentLat = request.getDestLat();
-            currentLng = request.getDestLng();
+            currentLat = order.getDestLat();
+            currentLng = order.getDestLng();
         }
 
         // 마지막 배송지에서 매장으로 귀환

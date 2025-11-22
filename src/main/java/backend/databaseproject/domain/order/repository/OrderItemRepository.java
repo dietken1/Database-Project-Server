@@ -1,6 +1,6 @@
 package backend.databaseproject.domain.order.repository;
 
-import backend.databaseproject.domain.order.entity.RequestItem;
+import backend.databaseproject.domain.order.entity.OrderItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -8,5 +8,5 @@ import org.springframework.stereotype.Repository;
  * 주문 항목 Repository
  */
 @Repository
-public interface RequestItemRepository extends JpaRepository<RequestItem, Long> {
+public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 }

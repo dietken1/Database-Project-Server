@@ -1,6 +1,6 @@
 package backend.databaseproject.domain.order.dto.response;
 
-import backend.databaseproject.domain.order.entity.DeliveryRequest;
+import backend.databaseproject.domain.order.entity.Order;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,7 +22,7 @@ import java.util.List;
 public class OrderResponse {
 
     @Schema(description = "주문 ID", example = "1")
-    private Long requestId;
+    private Long orderId;
 
     @Schema(description = "매장 ID", example = "1")
     private Long storeId;
@@ -30,23 +30,8 @@ public class OrderResponse {
     @Schema(description = "매장명", example = "스타벅스 강남점")
     private String storeName;
 
-    @Schema(description = "고객 ID", example = "1")
-    private Long customerId;
-
-    @Schema(description = "고객명", example = "김철수")
-    private String customerName;
-
-    @Schema(description = "배송 주소", example = "서울시 강남구 테헤란로 123")
-    private String customerAddress;
-
-    @Schema(description = "총 무게(kg)", example = "1.500")
-    private BigDecimal totalWeightKg;
-
     @Schema(description = "총 금액(원)", example = "15000")
     private Integer totalAmount;
-
-    @Schema(description = "주문 항목 수", example = "3")
-    private Integer itemCount;
 
     @Schema(description = "주문 상태", example = "CREATED")
     private String status;
@@ -70,30 +55,25 @@ public class OrderResponse {
     private Long routeId;
 
     /**
-     * DeliveryRequest 엔티티로부터 Response 생성 (Factory Method)
+     * Order 엔티티로부터 Response 생성 (Factory Method)
      */
-    public static OrderResponse from(DeliveryRequest deliveryRequest, Long routeId) {
-        List<OrderItemResponse> items = deliveryRequest.getRequestItems()
+    public static OrderResponse from(Order order, Long routeId) {
+        List<OrderItemResponse> items = order.getOrderItems()
                 .stream()
                 .map(OrderItemResponse::from)
                 .toList();
 
         return OrderResponse.builder()
-                .requestId(deliveryRequest.getRequestId())
-                .storeId(deliveryRequest.getStore().getStoreId())
-                .storeName(deliveryRequest.getStore().getName())
-                .customerId(deliveryRequest.getCustomer().getCustomerId())
-                .customerName(deliveryRequest.getCustomer().getName())
-                .customerAddress(deliveryRequest.getCustomer().getAddress())
-                .totalWeightKg(deliveryRequest.getTotalWeightKg())
-                .totalAmount(deliveryRequest.getTotalAmount())
-                .itemCount(deliveryRequest.getItemCount())
-                .status(deliveryRequest.getStatus().toString())
-                .createdAt(deliveryRequest.getCreatedAt())
-                .assignedAt(deliveryRequest.getAssignedAt())
-                .completedAt(deliveryRequest.getCompletedAt())
+                .orderId(order.getOrderId())
+                .storeId(order.getStore().getStoreId())
+                .storeName(order.getStore().getName())
+                .totalAmount(order.getTotalAmount())
+                .status(order.getStatus().toString())
+                .createdAt(order.getCreatedAt())
+                .assignedAt(order.getAssignedAt())
+                .completedAt(order.getCompletedAt())
                 .items(items)
-                .note(deliveryRequest.getNote())
+                .note(order.getNote())
                 .routeId(routeId)
                 .build();
     }

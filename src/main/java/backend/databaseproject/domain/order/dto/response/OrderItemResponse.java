@@ -1,6 +1,6 @@
 package backend.databaseproject.domain.order.dto.response;
 
-import backend.databaseproject.domain.order.entity.RequestItem;
+import backend.databaseproject.domain.order.entity.OrderItem;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,7 +20,7 @@ import java.math.BigDecimal;
 public class OrderItemResponse {
 
     @Schema(description = "주문 항목 ID", example = "1")
-    private Long requestItemId;
+    private Long orderItemId;
 
     @Schema(description = "상품 ID", example = "1")
     private Long productId;
@@ -34,25 +34,21 @@ public class OrderItemResponse {
     @Schema(description = "단가", example = "3000")
     private Integer unitPrice;
 
-    @Schema(description = "단위 무게(kg)", example = "0.300")
-    private BigDecimal unitWeightKg;
-
     @Schema(description = "소계 (수량 * 단가)", example = "6000")
     private Integer subtotal;
 
     /**
-     * RequestItem 엔티티로부터 Response 생성 (Factory Method)
+     * OrderItem 엔티티로부터 Response 생성 (Factory Method)
      */
-    public static OrderItemResponse from(RequestItem requestItem) {
-        Integer subtotal = requestItem.getQuantity() * requestItem.getUnitPrice();
+    public static OrderItemResponse from(OrderItem orderItem) {
+        Integer subtotal = orderItem.getQuantity() * orderItem.getUnitPrice();
 
         return OrderItemResponse.builder()
-                .requestItemId(requestItem.getRequestItemId())
-                .productId(requestItem.getProduct().getProductId())
-                .productName(requestItem.getProduct().getName())
-                .quantity(requestItem.getQuantity())
-                .unitPrice(requestItem.getUnitPrice())
-                .unitWeightKg(requestItem.getUnitWeightKg())
+                .orderItemId(orderItem.getOrderItemId())
+                .productId(orderItem.getProduct().getProductId())
+                .productName(orderItem.getProduct().getName())
+                .quantity(orderItem.getQuantity())
+                .unitPrice(orderItem.getUnitPrice())
                 .subtotal(subtotal)
                 .build();
     }

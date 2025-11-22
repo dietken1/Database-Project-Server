@@ -19,14 +19,14 @@ import lombok.NoArgsConstructor;
 public class OrderCreateResponse {
 
     @Schema(description = "주문 ID", example = "1")
-    private Long requestId;
+    private Long orderId;
 
     /**
      * 주문 ID로부터 Response 생성 (Factory Method)
      */
-    public static OrderCreateResponse of(Long requestId) {
+    public static OrderCreateResponse of(Long orderId) {
         return OrderCreateResponse.builder()
-                .requestId(requestId)
+                .orderId(orderId)
                 .build();
     }
 }

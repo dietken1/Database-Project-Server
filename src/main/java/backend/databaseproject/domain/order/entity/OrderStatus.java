@@ -1,9 +1,9 @@
 package backend.databaseproject.domain.order.entity;
 
 /**
- * 배송 요청 상태 Enum
+ * 주문 상태 Enum
  */
-public enum DeliveryStatus {
+public enum OrderStatus {
     CREATED,   // 주문 생성
     ASSIGNED,  // 배송 할당됨
     FULFILLED, // 배송 완료
