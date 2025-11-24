@@ -127,7 +127,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      MySQL Database                          │
 │                                                              │
-│  Store │ Product │ Customer │ Drone │ DeliveryRequest       │
+│  Store │ Product │ User │ Drone │ Order                 │
 │  Route │ RouteStop │ RoutePosition │ FlightLog ...          │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -179,11 +179,19 @@ backend.databaseproject/
     │   └── repository/
     │       └── ProductRepository.java
     │
-    ├── customer/                     # 고객 도메인
+    ├── user/                         # 사용자 도메인
+    │   ├── controller/
+    │   │   └── UserController.java
+    │   ├── service/
+    │   │   └── UserService.java
     │   ├── entity/
-    │   │   └── Customer.java
-    │   └── repository/
-    │       └── CustomerRepository.java
+    │   │   ├── User.java
+    │   │   └── UserRole.java (enum)
+    │   ├── repository/
+    │   │   └── UserRepository.java
+    │   └── dto/
+    │       └── response/
+    │           └── UserResponse.java
     │
     ├── order/                        # 주문 도메인
     │   ├── controller/
@@ -191,12 +199,12 @@ backend.databaseproject/
     │   ├── service/
     │   │   └── OrderService.java
     │   ├── repository/
-    │   │   ├── DeliveryRequestRepository.java
-    │   │   └── RequestItemRepository.java
+    │   │   ├── OrderRepository.java
+    │   │   └── OrderItemRepository.java
     │   ├── entity/
-    │   │   ├── DeliveryRequest.java
-    │   │   ├── RequestItem.java
-    │   │   └── DeliveryStatus.java (enum)
+    │   │   ├── Order.java
+    │   │   ├── OrderItem.java
+    │   │   └── OrderStatus.java (enum)
     │   └── dto/
     │       ├── request/
     │       │   ├── OrderCreateRequest.java
@@ -226,13 +234,11 @@ backend.databaseproject/
         │   ├── RouteRepository.java
         │   ├── RouteStopRepository.java
         │   ├── RoutePositionRepository.java
-        │   ├── RouteStopRequestRepository.java
         │   └── FlightLogRepository.java
         ├── entity/
         │   ├── Route.java
         │   ├── RouteStop.java
         │   ├── RoutePosition.java
-        │   ├── RouteStopRequest.java
         │   ├── FlightLog.java
         │   ├── RouteStatus.java (enum)
         │   ├── StopType.java (enum)
@@ -329,39 +335,40 @@ backend.databaseproject/
 
 ### 4.1 도메인 개요
 
-시스템은 6개의 핵심 도메인으로 구성됩니다:
+시스템은 7개의 핵심 도메인으로 구성됩니다:
 
 ```
-┌─────────┐      ┌─────────┐
-│  Store  │◄────►│ Product │
-│  (매장)  │      │  (상품)  │
-└────┬────┘      └────┬────┘
-     │                │
-     │                │
-     ▼                ▼
-┌──────────────────────────┐
-│    StoreProduct          │
-│   (매장별 판매 상품)        │
-└──────────────────────────┘
-     │
-     │
-     ▼
+┌─────────┐      ┌─────────┐      ┌─────────┐
+│  Store  │◄────►│ Product │      │  User   │
+│  (매장)  │      │  (상품)  │      │(사용자)  │
+└────┬────┘      └────┬────┘      └────┬────┘
+     │                │                │
+     │ owner_id       │                │ role:
+     │ (OWNER)        │                │ CUSTOMER
+     ▼                ▼                │ OWNER
+┌──────────────────────────┐          │
+│    StoreProduct          │          │
+│   (매장별 판매 상품)        │          │
+└──────────────────────────┘          │
+     │                                │
+     │                                │
+     ▼                                ▼
 ┌──────────────────────────┐      ┌──────────┐
-│   DeliveryRequest        │◄────►│ Customer │
-│      (주문)               │      │  (고객)   │
+│        Order             │◄────►│   User   │
+│      (주문)               │      │(CUSTOMER)│
 └──────┬───────────────────┘      └──────────┘
        │
        │ 1:N
        ▼
 ┌──────────────────────────┐
-│    RequestItem           │
+│      OrderItem           │
 │    (주문 항목)            │
 └──────────────────────────┘
        │
        │
        ▼
 ┌──────────────────────────┐
-│  RouteStopRequest        │
+│  RouteStopOrder          │
 │  (경로-주문 매핑)          │
 └──────┬───────────────────┘
        │
@@ -444,18 +451,41 @@ public class StoreProduct {
 ```
 **역할**: 매장마다 다른 가격/재고 관리
 
-#### DeliveryRequest (배송 요청/주문)
+#### User (사용자)
 ```java
 @Entity
-public class DeliveryRequest {
+@Table(name = "user")
+public class User {
     @Id @GeneratedValue
-    private Long requestId;
+    private Long userId;
+
+    private String name;                    // 사용자명
+    private String phone;                   // 전화번호
+    private String address;                 // 주소
+    private BigDecimal lat;                 // 위도
+    private BigDecimal lng;                 // 경도
+
+    @Enumerated(EnumType.STRING)
+    private UserRole role;                  // CUSTOMER, OWNER
+
+    private LocalDateTime registeredAt;     // 등록일시
+}
+```
+**역할**: 고객(CUSTOMER) 또는 매장 점주(OWNER)
+
+#### Order (주문)
+```java
+@Entity
+@Table(name = "orders")
+public class Order {
+    @Id @GeneratedValue
+    private Long orderId;
 
     @ManyToOne
     private Store store;                    // 출발 매장
 
     @ManyToOne
-    private Customer customer;              // 주문 고객
+    private User user;                      // 주문 사용자
 
     private BigDecimal originLat;           // 출발지 위도
     private BigDecimal originLng;           // 출발지 경도
@@ -467,19 +497,19 @@ public class DeliveryRequest {
     private Integer itemCount;              // 항목 수
 
     @Enumerated(EnumType.STRING)
-    private DeliveryStatus status;          // CREATED, ASSIGNED, FULFILLED, CANCELED
+    private OrderStatus status;             // CREATED, ASSIGNED, FULFILLED, CANCELED
 
-    @OneToMany(mappedBy = "deliveryRequest", cascade = CascadeType.ALL)
-    private List<RequestItem> requestItems; // 주문 항목들
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+    private List<OrderItem> orderItems;     // 주문 항목들
 
     // 비즈니스 메서드
     public void assignDelivery() {
-        this.status = DeliveryStatus.ASSIGNED;
+        this.status = OrderStatus.ASSIGNED;
         this.assignedAt = LocalDateTime.now();
     }
 }
 ```
-**역할**: 고객의 배송 요청 (주문서)
+**역할**: 사용자의 배송 요청 (주문서)
 
 #### Route (배송 경로)
 ```java
@@ -536,7 +566,7 @@ public class RouteStop {
     private Store store;                    // PICKUP/RETURN인 경우
 
     @ManyToOne
-    private Customer customer;              // DROP인 경우
+    private User user;                      // DROP인 경우
 }
 ```
 **역할**: 경로상의 각 정류장 (픽업 → 배송1 → 배송2 → ... → 복귀)
@@ -643,7 +673,7 @@ public static double calculateDistance(
   POST /api/orders
   RequestBody: {
     storeId: 1,
-    customerId: 1,
+    userId: 1,
     items: [{productId: 1, quantity: 2}, ...]
   }
       ↓
@@ -652,8 +682,8 @@ public static double calculateDistance(
   1️⃣ 매장 존재 및 활성화 확인
      └─ 없으면 STORE_NOT_FOUND 예외
 
-  2️⃣ 고객 존재 확인
-     └─ 없으면 CUSTOMER_NOT_FOUND 예외
+  2️⃣ 사용자 존재 확인
+     └─ 없으면 USER_NOT_FOUND 예외
 
   3️⃣ 주문 항목 검증
      └─ 비어있으면 ORDER_ITEMS_EMPTY 예외
@@ -666,20 +696,20 @@ public static double calculateDistance(
      │  └─ 초과하면 PRODUCT_EXCEED_MAX_QUANTITY 예외
      └─ 총 무게/금액 계산
 
-  5️⃣ DeliveryRequest 생성
+  5️⃣ Order 생성
      ├─ originLat/Lng ← Store 위치
-     ├─ destLat/Lng ← Customer 위치
+     ├─ destLat/Lng ← User 위치
      ├─ totalWeightKg, totalAmount, itemCount
      └─ status = CREATED
 
-  6️⃣ RequestItem 생성 및 추가
+  6️⃣ OrderItem 생성 및 추가
 
   7️⃣ ⭐ 재고 차감
      └─ storeProduct.decreaseStock(quantity)
 
   8️⃣ 트랜잭션 커밋
       ↓
-OrderResponse 반환
+OrderCreateResponse 반환
 ```
 
 #### 트랜잭션 관리
@@ -699,8 +729,8 @@ public class OrderService {
             sp.decreaseStock(item.getQuantity());  // ← UPDATE 쿼리 자동 생성
         }
 
-        // DeliveryRequest 저장
-        DeliveryRequest saved = deliveryRequestRepository.save(dr);
+        // Order 저장
+        Order saved = orderRepository.save(order);
 
         return OrderResponse.from(saved);
         // ← 여기서 트랜잭션 커밋 (재고 감소 확정)
@@ -733,12 +763,12 @@ public class OrderService {
 @Service
 public class RouteOptimizerService {
 
-    public List<DeliveryRequest> optimizeRoute(
-        List<DeliveryRequest> requests,
+    public List<Order> optimizeRoute(
+        List<Order> orders,
         Store store
     ) {
-        List<DeliveryRequest> optimized = new ArrayList<>();
-        List<DeliveryRequest> unvisited = new ArrayList<>(requests);
+        List<Order> optimized = new ArrayList<>();
+        List<Order> unvisited = new ArrayList<>(orders);
 
         // 현재 위치 = 매장
         double currentLat = store.getLat().doubleValue();
@@ -746,20 +776,20 @@ public class RouteOptimizerService {
 
         // 모든 배송지 방문할 때까지 반복
         while (!unvisited.isEmpty()) {
-            DeliveryRequest nearest = null;
+            Order nearest = null;
             double minDistance = Double.MAX_VALUE;
 
             // 현재 위치에서 가장 가까운 배송지 찾기
-            for (DeliveryRequest req : unvisited) {
+            for (Order order : unvisited) {
                 double distance = GeoUtils.calculateDistance(
                     currentLat, currentLng,
-                    req.getDestLat().doubleValue(),
-                    req.getDestLng().doubleValue()
+                    order.getDestLat().doubleValue(),
+                    order.getDestLng().doubleValue()
                 );
 
                 if (distance < minDistance) {
                     minDistance = distance;
-                    nearest = req;
+                    nearest = order;
                 }
             }
 
@@ -945,32 +975,32 @@ public class DeliveryBatchService {
 
     public void processBatch() {
         // 1. CREATED 상태의 주문들 조회
-        List<DeliveryRequest> pendingRequests =
-            deliveryRequestRepository.findByStatus(DeliveryStatus.CREATED);
+        List<Order> pendingOrders =
+            orderRepository.findByStatus(OrderStatus.CREATED);
 
-        if (pendingRequests.isEmpty()) {
-            log.info("처리할 배송 요청이 없습니다.");
+        if (pendingOrders.isEmpty()) {
+            log.info("처리할 주문이 없습니다.");
             return;
         }
 
         // 2. 매장별로 그룹화
-        Map<Long, List<DeliveryRequest>> groupedByStore = pendingRequests.stream()
-            .collect(Collectors.groupingBy(req -> req.getStore().getStoreId()));
+        Map<Long, List<Order>> groupedByStore = pendingOrders.stream()
+            .collect(Collectors.groupingBy(order -> order.getStore().getStoreId()));
 
         // 3. 각 매장별로 처리
-        for (Map.Entry<Long, List<DeliveryRequest>> entry : groupedByStore.entrySet()) {
+        for (Map.Entry<Long, List<Order>> entry : groupedByStore.entrySet()) {
             Long storeId = entry.getKey();
-            List<DeliveryRequest> requests = entry.getValue();
+            List<Order> orders = entry.getValue();
 
             try {
-                processStoreDeliveries(storeId, requests);
+                processStoreDeliveries(storeId, orders);
             } catch (Exception e) {
                 log.error("매장 {} 배송 처리 실패", storeId, e);
             }
         }
     }
 
-    private void processStoreDeliveries(Long storeId, List<DeliveryRequest> requests) {
+    private void processStoreDeliveries(Long storeId, List<Order> orders) {
         // 1. 매장 조회
         Store store = storeRepository.findById(storeId)
             .orElseThrow(() -> new BaseException(ErrorCode.STORE_NOT_FOUND));
@@ -980,8 +1010,8 @@ public class DeliveryBatchService {
             .orElseThrow(() -> new BaseException(ErrorCode.DRONE_NOT_AVAILABLE));
 
         // 3. 경로 최적화
-        List<DeliveryRequest> optimizedRequests =
-            routeOptimizerService.optimizeRoute(requests, store);
+        List<Order> optimizedOrders =
+            routeOptimizerService.optimizeRoute(orders, store);
 
         // 4. Route 생성
         Route route = Route.builder()
@@ -1008,27 +1038,20 @@ public class DeliveryBatchService {
         routeStopRepository.save(pickup);
 
         // 5-2. DROP들 (각 고객에게 배송)
-        for (DeliveryRequest req : optimizedRequests) {
+        for (Order order : optimizedOrders) {
             RouteStop drop = RouteStop.builder()
                 .route(route)
                 .stopSeq(seq++)
                 .type(StopType.DROP)
-                .name(req.getCustomer().getName())
-                .lat(req.getDestLat())
-                .lng(req.getDestLng())
-                .customer(req.getCustomer())
+                .name(order.getUser().getName())
+                .lat(order.getDestLat())
+                .lng(order.getDestLng())
+                .user(order.getUser())
                 .build();
             routeStopRepository.save(drop);
 
-            // RouteStopRequest 매핑
-            RouteStopRequest rsr = RouteStopRequest.builder()
-                .routeStop(drop)
-                .deliveryRequest(req)
-                .build();
-            routeStopRequestRepository.save(rsr);
-
             // 주문 상태 변경
-            req.assignDelivery();  // CREATED → ASSIGNED
+            order.assignDelivery();  // CREATED → ASSIGNED
         }
 
         // 5-3. RETURN (매장으로 복귀)
@@ -1201,7 +1224,7 @@ Content-Type: application/json
 
 {
   "storeId": 1,
-  "customerId": 1,
+  "userId": 1,
   "items": [
     {
       "productId": 1,
@@ -1219,26 +1242,8 @@ Content-Type: application/json
 **응답 (201 Created)**
 ```json
 {
-  "success": true,
-  "data": {
-    "requestId": 1,
-    "storeId": 1,
-    "storeName": "세븐일레븐 강남점",
-    "customerId": 1,
-    "customerName": "홍길동",
-    "customerAddress": "서울 강남구 테헤란로",
-    "totalWeightKg": 1.220,
-    "totalAmount": 4200,
-    "itemCount": 2,
-    "status": "CREATED",
-    "createdAt": "2025-11-20T14:30:00",
-    "items": [
-      {
-        "requestItemId": 1,
-        "productId": 1,
-        "productName": "콜라 500ml",
-        "quantity": 2,
-        "unitPrice": 1500,
+  "orderId": 1
+}
         "unitWeightKg": 0.550,
         "subtotal": 3000
       },
@@ -1438,12 +1443,12 @@ GET /api/routes/active
 └─────────────────┘                  │
                                      │
 ┌─────────────────────────────────┐  │
-│    DELIVERY_REQUEST             │  │
-│    (배송 요청/주문)               │  │
+│         ORDER                   │  │
+│        (주문)                    │  │
 ├─────────────────────────────────┤  │
-│ PK request_id                   │  │
+│ PK order_id                     │  │
 │ FK store_id ────────────────────┼──┘
-│ FK customer_id ─────┐           │
+│ FK user_id ─────────┐           │
 │    origin_lat/lng   │           │
 │    dest_lat/lng     │           │
 │    total_weight_kg  │           │
@@ -1454,36 +1459,17 @@ GET /api/routes/active
      │ 1                          │ 1
      │                            │
      │ N                ┌─────────▼──────┐
-     ▼                  │   CUSTOMER     │
-┌──────────────────┐    │   (고객)        │
-│  REQUEST_ITEM    │    ├────────────────┤
-│  (주문 항목)      │    │ PK customer_id │
+     ▼                  │      USER      │
+┌──────────────────┐    │    (사용자)     │
+│  ORDER_ITEM      │    ├────────────────┤
+│  (주문 항목)      │    │ PK user_id     │
 ├──────────────────┤    │    name        │
-│ PK request_item_ │    │    phone       │
-│    id            │    │    address     │
-│ FK request_id    │    │    lat, lng    │
-│ FK product_id    │    └────────────────┘
-│    quantity      │
-│    unit_price    │
-└────┬─────────────┘
-     │
-     │ 1
-     │
-     │ 1
-     ▼
-┌──────────────────────┐
-│ ROUTE_STOP_REQUEST   │
-│ (경로-주문 매핑)       │
-├──────────────────────┤
-│ PK stop_request_id   │
-│ FK stop_id           │
-│ FK request_id        │◄── UNIQUE
-└──────┬───────────────┘
-       │
-       │ N
-       │
-       │ 1
-       ▼
+│ PK order_item_id │    │    phone       │
+│ FK order_id      │    │    address     │
+│ FK product_id    │    │    lat, lng    │
+│    quantity      │    │    role        │
+│    unit_price    │    └────────────────┘
+└──────────────────┘
 ┌──────────────────────┐        ┌─────────────┐
 │    ROUTE_STOP        │        │   DRONE     │
 │    (정류장)           │        │  (드론)      │
@@ -1496,7 +1482,8 @@ GET /api/routes/active
 │    lat, lng          │    │   │    payload_ │
 │    status            │    │   │    kg       │
 │ FK store_id (opt)    │    │   │    status   │
-│ FK customer_id (opt) │    │   └──┬──────────┘
+│ FK user_id (opt)     │    │   └──┬──────────┘
+│ FK order_id          │    │
 └──────────────────────┘    │      │
                             │      │ 1
        ┌────────────────────┤      │
@@ -1548,10 +1535,10 @@ GET /api/routes/active
 - **복합 키**: (store_id, product_id)
 - **특징**: `stock_qty`가 실시간으로 증감
 
-#### delivery_request (배송 요청)
+#### order (주문)
 - **역할**: 고객의 주문서
 - **상태**: CREATED → ASSIGNED → FULFILLED
-- **특징**: `origin_*`는 Store, `dest_*`는 Customer
+- **특징**: `origin_*`는 Store, `dest_*`는 User
 
 #### route (배송 경로)
 - **역할**: 한 번의 드론 출격 임무
@@ -1576,11 +1563,11 @@ CREATE INDEX ix_store_location ON store(lat, lng);
 
 -- 상태별 빠른 조회
 CREATE INDEX ix_dr_status ON drone(status);
-CREATE INDEX ix_req_status ON delivery_request(status);
+CREATE INDEX ix_order_status ON `order`(status);
 CREATE INDEX ix_route_status ON route(status);
 
 -- 매장별 주문 조회
-CREATE INDEX ix_req_store_status ON delivery_request(store_id, status);
+CREATE INDEX ix_order_store_status ON `order`(store_id, status);
 
 -- 최신 위치 조회 최적화
 CREATE INDEX ix_rp_route_ts ON route_position(route_id, ts);
@@ -1604,9 +1591,6 @@ CONSTRAINT chk_price_nonneg CHECK (price >= 0)
 
 -- 드론 적재량 양수 보장
 CONSTRAINT chk_payload_pos CHECK (max_payload_kg > 0)
-
--- 주문 당 1개의 RouteStop만 매핑
-CONSTRAINT uq_sreq_req UNIQUE (request_id)
 ```
 
 ---
@@ -1813,11 +1797,11 @@ public class SchedulerConfig {
 │         DeliveryBatchService.processBatch()             │
 ├─────────────────────────────────────────────────────────┤
 │  1. CREATED 상태 주문 조회                                │
-│     └─ SELECT * FROM delivery_request                   │
+│     └─ SELECT * FROM `order`                             │
 │        WHERE status = 'CREATED'                          │
 │                                                          │
 │  2. 매장별 그룹화                                          │
-│     └─ Map<StoreId, List<DeliveryRequest>>               │
+│     └─ Map<StoreId, List<Order>>                         │
 │                                                          │
 │  3. 각 매장별 처리 (Loop)                                  │
 │     ├─ 대기 중인 드론 조회                                 │
@@ -1833,11 +1817,8 @@ public class SchedulerConfig {
 │     ├─ RouteStop 생성 (PICKUP → DROP들 → RETURN)         │
 │     │  └─ INSERT INTO route_stop ...                    │
 │     │                                                    │
-│     ├─ RouteStopRequest 매핑                             │
-│     │  └─ INSERT INTO route_stop_request ...            │
-│     │                                                    │
-│     ├─ DeliveryRequest 상태 변경                         │
-│     │  └─ UPDATE delivery_request                       │
+│     ├─ Order 상태 변경                                   │
+│     │  └─ UPDATE `order`                                │
 │     │     SET status = 'ASSIGNED' ...                   │
 │     │                                                    │
 │     ├─ Drone 상태 변경                                   │
@@ -2044,10 +2025,10 @@ Service
 #### 문제 상황
 ```java
 // ❌ N+1 발생
-List<DeliveryRequest> requests = deliveryRequestRepository.findAll();
+List<Order> orders = orderRepository.findAll();
 
-for (DeliveryRequest req : requests) {
-    String storeName = req.getStore().getName();  // ← SELECT 쿼리 N번 추가 실행
+for (Order order : orders) {
+    String storeName = order.getStore().getName();  // ← SELECT 쿼리 N번 추가 실행
 }
 ```
 
@@ -2055,11 +2036,12 @@ for (DeliveryRequest req : requests) {
 
 ```java
 // ✅ Fetch Join 사용
-@Query("SELECT dr FROM DeliveryRequest dr " +
-       "JOIN FETCH dr.store " +
-       "JOIN FETCH dr.customer " +
-       "WHERE dr.status = :status")
-List<DeliveryRequest> findPendingRequestsWithStoreAndCustomer(@Param("status") DeliveryStatus status);
+@Query("SELECT o FROM Order o " +
+       "JOIN FETCH o.store " +
+       "JOIN FETCH o.user " +
+       "WHERE o.status = :status " +
+       "ORDER BY o.store.storeId, o.createdAt")
+List<Order> findPendingOrdersWithStoreAndUser(@Param("status") OrderStatus status);
 
 // 단 1번의 JOIN 쿼리로 모든 데이터 조회
 ```
@@ -2083,10 +2065,10 @@ public class Route {
 
 ```sql
 -- 상태별 조회 빈번
-CREATE INDEX ix_req_status ON delivery_request(status);
+CREATE INDEX ix_order_status ON `order`(status);
 
 -- 매장별 + 상태별 조회
-CREATE INDEX ix_req_store_status ON delivery_request(store_id, status);
+CREATE INDEX ix_order_store_status ON `order`(store_id, status);
 
 -- 경로의 최신 위치 조회
 CREATE INDEX ix_rp_route_ts ON route_position(route_id, ts);
@@ -2094,9 +2076,9 @@ CREATE INDEX ix_rp_route_ts ON route_position(route_id, ts);
 
 **쿼리 실행 계획 확인**:
 ```sql
-EXPLAIN SELECT * FROM delivery_request WHERE status = 'CREATED';
+EXPLAIN SELECT * FROM `order` WHERE status = 'CREATED';
 -- type: ref (인덱스 사용)
--- key: ix_req_status
+-- key: ix_order_status
 ```
 
 ### 11.4 배치 INSERT 최적화

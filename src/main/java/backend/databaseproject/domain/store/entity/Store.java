@@ -1,5 +1,6 @@
 package backend.databaseproject.domain.store.entity;
 
+import backend.databaseproject.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -22,6 +23,10 @@ public class Store {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "store_id")
     private Long storeId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id", nullable = false)
+    private User owner;
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -59,8 +64,9 @@ public class Store {
     }
 
     @Builder
-    public Store(String name, StoreType type, String phone, String address,
+    public Store(User owner, String name, StoreType type, String phone, String address,
                  BigDecimal lat, BigDecimal lng, BigDecimal deliveryRadiusKm, Boolean isActive) {
+        this.owner = owner;
         this.name = name;
         this.type = type;
         this.phone = phone;

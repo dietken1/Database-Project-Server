@@ -1,7 +1,5 @@
 package backend.databaseproject.domain.order.service;
 
-import backend.databaseproject.domain.customer.entity.Customer;
-import backend.databaseproject.domain.customer.repository.CustomerRepository;
 import backend.databaseproject.domain.drone.repository.DroneRepository;
 import backend.databaseproject.domain.order.dto.request.OrderCreateRequest;
 import backend.databaseproject.domain.order.dto.request.OrderItemRequest;
@@ -18,6 +16,8 @@ import backend.databaseproject.domain.store.entity.Store;
 import backend.databaseproject.domain.store.entity.StoreProduct;
 import backend.databaseproject.domain.store.repository.StoreProductRepository;
 import backend.databaseproject.domain.store.repository.StoreRepository;
+import backend.databaseproject.domain.user.entity.User;
+import backend.databaseproject.domain.user.repository.UserRepository;
 import backend.databaseproject.global.common.BaseException;
 import backend.databaseproject.global.common.ErrorCode;
 import backend.databaseproject.global.util.GeoUtils;
@@ -40,7 +40,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final StoreRepository storeRepository;
-    private final CustomerRepository customerRepository;
+    private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final StoreProductRepository storeProductRepository;
     private final DroneRepository droneRepository;
@@ -50,7 +50,7 @@ public class OrderService {
      * 주문 생성
      * 1. Store 조회 (없으면 STORE_NOT_FOUND)
      * 2. Store 활성 확인 (비활성이면 STORE_NOT_ACTIVE)
-     * 3. Customer 조회 (없으면 CUSTOMER_NOT_FOUND)
+     * 3. User 조회 (없으면 USER_NOT_FOUND)
      * 4. items가 비어있으면 ORDER_ITEMS_EMPTY
      * 5. 각 아이템별로:
      *    - StoreProduct 조회 (매장에서 판매하는 상품인지 확인)
@@ -75,9 +75,9 @@ public class OrderService {
             throw new BaseException(ErrorCode.STORE_NOT_ACTIVE);
         }
 
-        // 3. Customer 조회
-        Customer customer = customerRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new BaseException(ErrorCode.CUSTOMER_NOT_FOUND));
+        // 3. User 조회
+        User user = userRepository.findById(request.getUserId())
+                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
 
         // 4. items 비어있는지 확인
         if (request.getItems() == null || request.getItems().isEmpty()) {
@@ -130,22 +130,22 @@ public class OrderService {
         double distanceKm = GeoUtils.calculateDistance(
                 store.getLat().doubleValue(),
                 store.getLng().doubleValue(),
-                customer.getLat().doubleValue(),
-                customer.getLng().doubleValue()
+                user.getLat().doubleValue(),
+                user.getLng().doubleValue()
         );
         if (distanceKm > store.getDeliveryRadiusKm().doubleValue()) {
             throw new BaseException(ErrorCode.STORE_OUT_OF_DELIVERY_RANGE);
         }
 
         // 8. Order 생성
-        // originLat/Lng는 Store, destLat/Lng는 Customer
+        // originLat/Lng는 Store, destLat/Lng는 User
         Order order = Order.builder()
                 .store(store)
-                .customer(customer)
+                .user(user)
                 .originLat(store.getLat())
                 .originLng(store.getLng())
-                .destLat(customer.getLat())
-                .destLng(customer.getLng())
+                .destLat(user.getLat())
+                .destLng(user.getLng())
                 .totalWeightKg(totalWeightKg)
                 .totalAmount(totalAmount)
                 .itemCount(itemCount)

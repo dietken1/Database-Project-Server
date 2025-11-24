@@ -30,8 +30,8 @@ public enum ErrorCode {
     PRODUCT_OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "P003", "재고가 부족합니다."),
     PRODUCT_EXCEED_MAX_QUANTITY(HttpStatus.BAD_REQUEST, "P004", "최대 주문 수량을 초과했습니다."),
 
-    // Customer Errors (4000번대)
-    CUSTOMER_NOT_FOUND(HttpStatus.NOT_FOUND, "CU001", "존재하지 않는 고객입니다."),
+    // User Errors (4000번대)
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U001", "존재하지 않는 사용자입니다."),
 
     // Order Errors (5000번대)
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "O001", "존재하지 않는 주문입니다."),

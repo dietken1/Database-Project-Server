@@ -57,7 +57,7 @@ public class DeliveryBatchService {
         try {
             // 1. CREATED 상태의 Order들을 조회
             List<Order> pendingOrders = orderRepository
-                    .findPendingOrdersWithStoreAndCustomer(OrderStatus.CREATED);
+                    .findPendingOrdersWithStoreAndUser(OrderStatus.CREATED);
 
             if (pendingOrders.isEmpty()) {
                 log.info("처리할 배송 요청이 없습니다.");
@@ -184,7 +184,7 @@ public class DeliveryBatchService {
         // 2. DROP들 (각 배송지)
         for (Order order : orders) {
             RouteStop dropStop = createRouteStop(route, sequence++, StopType.DROP,
-                    order.getCustomer().getName(), null, order.getCustomer(),
+                    order.getUser().getName(), null, order.getUser(),
                     order.getDestLat(), order.getDestLng(),
                     order.getTotalWeightKg().negate()); // 배송으로 무게 감소
             routeStopRepository.save(dropStop);
@@ -207,7 +207,7 @@ public class DeliveryBatchService {
      * RouteStop 생성 헬퍼 메서드
      */
     private RouteStop createRouteStop(Route route, int sequence, StopType type, String name,
-                                       Store store, backend.databaseproject.domain.customer.entity.Customer customer,
+                                       Store store, backend.databaseproject.domain.user.entity.User user,
                                        BigDecimal lat, BigDecimal lng, BigDecimal payloadDelta) {
         return RouteStop.builder()
                 .route(route)
@@ -218,7 +218,7 @@ public class DeliveryBatchService {
                 .lng(lng)
                 .payloadDeltaKg(payloadDelta)
                 .store(store)
-                .customer(customer)
+                .user(user)
                 .build();
     }
 

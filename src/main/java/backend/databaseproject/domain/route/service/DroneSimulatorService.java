@@ -173,8 +173,8 @@ public class DroneSimulatorService {
                         order.completeDelivery();
                         orderRepository.save(order);
 
-                        log.info("주문 완료 처리 - OrderId: {}, Customer: {}",
-                                order.getOrderId(), order.getCustomer().getName());
+                        log.info("주문 완료 처리 - OrderId: {}, User: {}",
+                                order.getOrderId(), order.getUser().getName());
 
                         // WebSocket으로 배송 완료 알림 전송
                         Map<String, Object> completionData = new HashMap<>();

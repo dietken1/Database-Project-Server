@@ -1,4 +1,4 @@
-package backend.databaseproject.domain.customer.entity;
+package backend.databaseproject.domain.user.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -10,18 +10,18 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 고객 엔티티
+ * 사용자 엔티티 (고객 + 점주 통합)
  */
 @Entity
-@Table(name = "customer")
+@Table(name = "user")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Customer {
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "customer_id")
-    private Long customerId;
+    @Column(name = "user_id")
+    private Long userId;
 
     @Column(nullable = false, length = 80)
     private String name;
@@ -38,6 +38,10 @@ public class Customer {
     @Column(nullable = false, precision = 9, scale = 6)
     private BigDecimal lng;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserRole role;
+
     @Column(name = "registered_at", nullable = false, updatable = false)
     private LocalDateTime registeredAt;
 
@@ -49,11 +53,12 @@ public class Customer {
     }
 
     @Builder
-    public Customer(String name, String phone, String address, BigDecimal lat, BigDecimal lng) {
+    public User(String name, String phone, String address, BigDecimal lat, BigDecimal lng, UserRole role) {
         this.name = name;
         this.phone = phone;
         this.address = address;
         this.lat = lat;
         this.lng = lng;
+        this.role = role;
     }
 }

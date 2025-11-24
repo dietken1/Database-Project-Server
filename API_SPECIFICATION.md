@@ -71,7 +71,7 @@ http://localhost:8080/api
 ```json
 {
   "storeId": 1,
-  "customerId": 1,
+  "userId": 1,
   "items": [
     {
       "productId": 1,
@@ -91,7 +91,7 @@ http://localhost:8080/api
 | 필드 | 타입 | 필수 | 설명 | 예시 |
 |------|------|------|------|------|
 | storeId | Long | O | 매장 ID | 1 |
-| customerId | Long | O | 고객 ID | 1 |
+| userId | Long | O | 사용자 ID | 1 |
 | items | Array | O | 주문 항목 목록 (최소 1개) | - |
 | items[].productId | Long | O | 상품 ID | 1 |
 | items[].quantity | Integer | O | 주문 수량 (최소 1) | 2 |
@@ -119,7 +119,8 @@ http://localhost:8080/api
   - `PRODUCT_EXCEED_MAX_QUANTITY`: 최대 주문 수량 초과
   - `ORDER_TOTAL_WEIGHT_EXCEEDED`: **주문 총 무게가 드론 적재 한계 초과** ⚠️
   - `STORE_OUT_OF_DELIVERY_RANGE`: **배송 가능 거리 초과** ⚠️
-- `404 Not Found`: 리소스를 찾을 수 없음 (매장, 고객, 상품 등)
+- `404 Not Found`: 리소스를 찾을 수 없음 (매장, 사용자, 상품 등)
+  - `USER_NOT_FOUND`: 존재하지 않는 사용자
 - `500 Internal Server Error`: 서버 내부 오류
 
 > **중요**: 서버에서 무게 및 거리 검증을 수행하므로, 프론트엔드에서도 사전 검증을 구현하여 사용자 경험을 개선하세요.
@@ -750,7 +751,7 @@ Content-Type: application/json
 
 {
   "storeId": 1,
-  "customerId": 5,
+  "userId": 5,
   "items": [
     {"productId": 1, "quantity": 2},
     {"productId": 2, "quantity": 1}
@@ -764,19 +765,19 @@ Content-Type: application/json
 2. `OrderService.createOrder()` 실행
 3. **검증 단계**:
    - 매장 존재 및 활성 상태 확인
-   - 고객 존재 확인
+   - 사용자 존재 확인
    - 각 상품의 재고 확인 (`StoreProduct` 조회)
    - 주문 수량이 `maxQtyPerOrder` 이하인지 확인
    - **드론 최대 적재 무게 검증** (초과 시 `ORDER_TOTAL_WEIGHT_EXCEEDED`)
    - **배송 가능 거리 검증** (초과 시 `STORE_OUT_OF_DELIVERY_RANGE`)
 4. **주문 생성**:
-   - `DeliveryRequest` 엔티티 생성 (상태: CREATED)
-   - 각 상품별로 `RequestItem` 생성
+   - `Order` 엔티티 생성 (상태: CREATED)
+   - 각 상품별로 `OrderItem` 생성
    - 총 무게 계산 (`unitWeightKg × quantity` 합산)
    - 총 금액 계산 (`price × quantity` 합산)
 5. **재고 차감**:
    - 각 상품의 `StoreProduct.stockQty` 감소
-6. **트랜잭션 커밋** 후 `OrderResponse` 반환
+6. **트랜잭션 커밋** 후 `OrderCreateResponse` 반환
 
 **클라이언트 화면**
 - 주문 완료 화면 표시
@@ -796,8 +797,8 @@ GET /api/orders/1
 
 **서버 로직**
 1. `OrderController.getOrder()` 호출
-2. `OrderService.getOrder(requestId=1)` 실행
-3. `DeliveryRequestRepository.findById()` 조회
+2. `OrderService.getOrder(orderId=1)` 실행
+3. `OrderRepository.findById()` 조회
 4. `OrderResponse` 변환하여 반환
 
 **클라이언트 화면**
@@ -826,7 +827,7 @@ POST /api/routes/start-delivery
 1. **`RouteController.startDelivery()` 호출**
 2. **`DeliveryBatchService.processBatch()` 실행** - 핵심 배치 처리
 3. **대기 중인 주문 수집**:
-   - `DeliveryRequestRepository.findByStatusOrderByCreatedAtAsc(CREATED)` - 먼저 온 주문 순
+   - `OrderRepository.findPendingOrdersWithStoreAndUser(CREATED)` - 먼저 온 주문 순
 4. **사용 가능한 드론 조회**:
    - `DroneRepository.findByIsActiveTrueAndStatusEquals(AVAILABLE)`
 5. **배송 그룹 생성 (Greedy Algorithm)**:
@@ -1283,11 +1284,17 @@ public void simulateFlight(Long routeId) {
 
 ---
 
-**문서 버전**: 6.0
-**최종 수정일**: 2025-11-22
+**문서 버전**: 7.0
+**최종 수정일**: 2025-11-25
 **작성자**: Backend Development Team
 
 **변경 이력**
+- v7.0 (2025-11-25): 데이터베이스 스키마 리팩토링 - Customer/User 통합 ⭐⭐
+  - **Customer 테이블 삭제**: User 테이블로 통합 (role 필드 추가: CUSTOMER, OWNER)
+  - **Store-Owner 관계 추가**: Store 엔티티에 owner_id FK 추가 (Store ↔ User(OWNER) 관계)
+  - **API 변경**: `customerId` → `userId` 파라미터명 변경
+  - **에러 코드 변경**: `CUSTOMER_NOT_FOUND` → `USER_NOT_FOUND`
+  - **용어 통일**: "고객" → "사용자"로 전체 용어 통일
 - v6.0 (2025-11-22): 치명적 버그 수정 및 용어 통일, 응답 최적화 ⭐⭐⭐
   - **치명적 버그 수정**: 주문 완료 로직 추가 (배송 완료 시 주문 상태가 FULFILLED로 변경됨)
   - **WebSocket 배송 완료 알림 추가**: `/topic/order/{orderId}` 토픽으로 실시간 완료 알림 전송

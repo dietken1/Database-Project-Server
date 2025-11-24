@@ -1,7 +1,7 @@
 package backend.databaseproject.domain.route.entity;
 
-import backend.databaseproject.domain.customer.entity.Customer;
 import backend.databaseproject.domain.store.entity.Store;
+import backend.databaseproject.domain.user.entity.User;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -71,8 +71,8 @@ public class RouteStop {
     private Store store;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id")
-    private Customer customer;
+    @JoinColumn(name = "user_id")
+    private User user;
 
     @Column(columnDefinition = "TEXT")
     private String note;
@@ -85,7 +85,7 @@ public class RouteStop {
                      BigDecimal lat, BigDecimal lng,
                      LocalDateTime plannedArrivalAt, LocalDateTime plannedDepartureAt,
                      BigDecimal payloadDeltaKg,
-                     Store store, Customer customer, String note) {
+                     Store store, User user, String note) {
         this.route = route;
         this.stopSequence = stopSequence;
         this.stopType = stopType;
@@ -96,7 +96,7 @@ public class RouteStop {
         this.plannedDepartureAt = plannedDepartureAt;
         this.payloadDeltaKg = payloadDeltaKg;
         this.store = store;
-        this.customer = customer;
+        this.user = user;
         this.status = StopStatus.PENDING;
         this.note = note;
     }

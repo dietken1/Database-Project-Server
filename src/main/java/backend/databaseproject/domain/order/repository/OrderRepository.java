@@ -30,8 +30,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      */
     @Query("SELECT o FROM Order o " +
            "JOIN FETCH o.store " +
-           "JOIN FETCH o.customer " +
+           "JOIN FETCH o.user " +
            "WHERE o.status = :status " +
            "ORDER BY o.store.storeId, o.createdAt")
-    List<Order> findPendingOrdersWithStoreAndCustomer(@Param("status") OrderStatus status);
+    List<Order> findPendingOrdersWithStoreAndUser(@Param("status") OrderStatus status);
 }

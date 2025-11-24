@@ -25,9 +25,9 @@ public class OrderCreateRequest {
     @Schema(description = "매장 ID", example = "1")
     private Long storeId;
 
-    @NotNull(message = "고객 ID는 필수입니다.")
-    @Schema(description = "고객 ID", example = "1")
-    private Long customerId;
+    @NotNull(message = "사용자 ID는 필수입니다.")
+    @Schema(description = "사용자 ID", example = "1")
+    private Long userId;
 
     @NotEmpty(message = "주문 항목이 비어있을 수 없습니다.")
     @Valid

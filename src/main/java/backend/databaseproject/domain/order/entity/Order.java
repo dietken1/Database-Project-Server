@@ -1,6 +1,6 @@
 package backend.databaseproject.domain.order.entity;
 
-import backend.databaseproject.domain.customer.entity.Customer;
+import backend.databaseproject.domain.user.entity.User;
 import backend.databaseproject.domain.store.entity.Store;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -32,8 +32,8 @@ public class Order {
     private Store store;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id", nullable = false)
-    private Customer customer;
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
     @Column(name = "origin_lat", nullable = false, precision = 9, scale = 6)
     private BigDecimal originLat;
@@ -89,13 +89,13 @@ public class Order {
     }
 
     @Builder
-    public Order(Store store, Customer customer,
+    public Order(Store store, User user,
                  BigDecimal originLat, BigDecimal originLng,
                  BigDecimal destLat, BigDecimal destLng,
                  BigDecimal totalWeightKg, Integer totalAmount, Integer itemCount,
                  String note) {
         this.store = store;
-        this.customer = customer;
+        this.user = user;
         this.originLat = originLat;
         this.originLng = originLng;
         this.destLat = destLat;
