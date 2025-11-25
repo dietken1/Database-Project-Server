@@ -345,52 +345,47 @@ backend.databaseproject/
      │                │                │
      │ owner_id       │                │ role:
      │ (OWNER)        │                │ CUSTOMER
-     ▼                ▼                │ OWNER
-┌──────────────────────────┐          │
-│    StoreProduct          │          │
-│   (매장별 판매 상품)        │          │
-└──────────────────────────┘          │
-     │                                │
-     │                                │
-     ▼                                ▼
-┌──────────────────────────┐      ┌──────────┐
-│        Order             │◄────►│   User   │
-│      (주문)               │      │(CUSTOMER)│
-└──────┬───────────────────┘      └──────────┘
-       │
-       │ 1:N
-       ▼
-┌──────────────────────────┐
-│      OrderItem           │
-│    (주문 항목)            │
-└──────────────────────────┘
-       │
-       │
-       ▼
-┌──────────────────────────┐
-│  RouteStopOrder          │
-│  (경로-주문 매핑)          │
-└──────┬───────────────────┘
-       │
-       ▼
-┌──────────────────────────┐      ┌─────────┐
-│     RouteStop            │      │  Drone  │
-│     (정류장)              │      │ (드론)   │
-└──────┬───────────────────┘      └────┬────┘
-       │                               │
-       │ N:1                           │ 1:N
-       ▼                               ▼
-┌──────────────────────────────────────────┐
-│              Route                        │
-│            (배송 경로)                     │
-└──────┬───────────────────────────────┬───┘
-       │                               │
-       │ 1:N                           │ 1:N
-       ▼                               ▼
-┌──────────────┐              ┌──────────────┐
-│RoutePosition │              │  FlightLog   │
-│(드론 위치)    │              │ (비행 로그)   │
-└──────────────┘              └──────────────┘
+     │                ▼                │ OWNER
+     │         ┌──────────────────────────┐
+     │         │    StoreProduct          │
+     │         │   (매장별 판매 상품)        │
+     │         └──────────────────────────┘
+     │                │                │
+     │ 1:N (drones)   │                │
+     ▼                ▼                ▼
+┌──────────┐  ┌──────────────────────────┐      ┌──────────┐
+│  Drone   │  │        Order             │◄────►│   User   │
+│ (드론)    │  │      (주문)               │      │(CUSTOMER)│
+└────┬─────┘  └──────┬───────────────────┘      └──────────┘
+     │               │
+     │ N:1 (store)   │ 1:N
+     │               ▼
+     │        ┌──────────────────────────┐
+     │        │      OrderItem           │
+     │        │    (주문 항목)            │
+     │        └──────────────────────────┘
+     │               │
+     │ 1:N           │
+     ▼               ▼
+┌─────────┐   ┌──────────────────────────┐
+│  Route  │   │  RouteStopOrder          │
+│(배송경로)│   │  (경로-주문 매핑)          │
+└────┬────┘   └──────┬───────────────────┘
+     │               │
+     │ 1:N           ▼
+     ▼        ┌──────────────────────────┐
+┌──────────┐  │     RouteStop            │
+│RoutePos. │  │     (정류장)              │
+└──────────┘  └──────────────────────────┘
+┌──────────┐
+│FlightLog │
+└──────────┘
+
+주요 관계:
+- Store 1:N Drone (각 매장은 여러 드론 보유)
+- Drone N:1 Store (각 드론은 특정 매장 소속)
+- Store 1:N User(OWNER) (각 매장은 1명의 점주 소유)
+- Drone 1:N Route (드론은 여러 배송 경로 수행)
 ```
 
 ### 4.2 주요 Entity 설명
@@ -510,6 +505,30 @@ public class Order {
 }
 ```
 **역할**: 사용자의 배송 요청 (주문서)
+
+#### Drone (드론)
+```java
+@Entity
+public class Drone {
+    @Id @GeneratedValue
+    private Long droneId;
+
+    @ManyToOne
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;                    // 소속 매장
+
+    private String model;                   // 모델명
+    private Integer batteryCapacity;        // 배터리 용량 (mAh)
+    private BigDecimal maxPayloadKg;        // 최대 적재량 (kg)
+
+    @Enumerated(EnumType.STRING)
+    private DroneStatus status;             // IDLE, IN_FLIGHT, CHARGING, MAINTENANCE
+}
+```
+**역할**: 배송을 수행하는 드론 (매장 소속)
+**관계**:
+- N:1 Store (각 드론은 특정 매장 소속)
+- 1:N Route (드론은 여러 배송 경로 수행)
 
 #### Route (배송 경로)
 ```java
@@ -1005,8 +1024,8 @@ public class DeliveryBatchService {
         Store store = storeRepository.findById(storeId)
             .orElseThrow(() -> new BaseException(ErrorCode.STORE_NOT_FOUND));
 
-        // 2. 대기 중인 드론 조회
-        Drone drone = droneRepository.findFirstByStatus(DroneStatus.IDLE)
+        // 2. 해당 매장의 대기 중인 드론 조회
+        Drone drone = droneRepository.findFirstByStoreAndStatus(store, DroneStatus.IDLE)
             .orElseThrow(() -> new BaseException(ErrorCode.DRONE_NOT_AVAILABLE));
 
         // 3. 경로 최적화
@@ -1470,34 +1489,34 @@ GET /api/routes/active
 │    quantity      │    │    role        │
 │    unit_price    │    └────────────────┘
 └──────────────────┘
-┌──────────────────────┐        ┌─────────────┐
-│    ROUTE_STOP        │        │   DRONE     │
-│    (정류장)           │        │  (드론)      │
-├──────────────────────┤        ├─────────────┤
-│ PK stop_id           │        │ PK drone_id │
-│ FK route_id          │◄───┐   │    model    │
-│    stop_seq          │    │   │    battery_ │
-│    type              │    │   │    capacity │
-│    name              │    │   │    max_     │
-│    lat, lng          │    │   │    payload_ │
-│    status            │    │   │    kg       │
-│ FK store_id (opt)    │    │   │    status   │
-│ FK user_id (opt)     │    │   └──┬──────────┘
-│ FK order_id          │    │
-└──────────────────────┘    │      │
-                            │      │ 1
-       ┌────────────────────┤      │
-       │                    │      │ N
-       │ N                  │ 1    │
-       │                    │      │
-       ▼                    ▼      ▼
-┌──────────────────────────────────────┐
-│            ROUTE                     │
-│          (배송 경로)                  │
-├──────────────────────────────────────┤
-│ PK route_id                          │
-│ FK drone_id                          │
-│ FK store_id                          │
+┌──────────────────────┐        ┌─────────────────┐
+│    ROUTE_STOP        │        │     DRONE       │
+│    (정류장)           │        │    (드론)        │
+├──────────────────────┤        ├─────────────────┤
+│ PK stop_id           │        │ PK drone_id     │
+│ FK route_id          │◄───┐   │ FK store_id ────┼──┐
+│    stop_seq          │    │   │    model        │  │
+│    type              │    │   │    battery_     │  │
+│    name              │    │   │    capacity     │  │
+│    lat, lng          │    │   │    max_payload_ │  │
+│    status            │    │   │    kg           │  │
+│ FK store_id (opt)    │    │   │    status       │  │
+│ FK user_id (opt)     │    │   └────┬────────────┘  │
+│ FK order_id          │    │        │               │
+└──────────────────────┘    │        │ 1             │
+                            │        │               │
+       ┌────────────────────┤        │ N             │
+       │                    │        │               │
+       │ N                  │ 1      │               │
+       │                    │        │               │
+       ▼                    ▼        ▼               │
+┌──────────────────────────────────────┐             │
+│            ROUTE                     │             │
+│          (배송 경로)                  │             │
+├──────────────────────────────────────┤             │
+│ PK route_id                          │             │
+│ FK drone_id                          │             │
+│ FK store_id ─────────────────────────┼─────────────┘
 │    status                            │
 │    planned_start_at                  │
 │    actual_start_at                   │
@@ -1804,9 +1823,10 @@ public class SchedulerConfig {
 │     └─ Map<StoreId, List<Order>>                         │
 │                                                          │
 │  3. 각 매장별 처리 (Loop)                                  │
-│     ├─ 대기 중인 드론 조회                                 │
+│     ├─ 해당 매장의 대기 중인 드론 조회                      │
 │     │  └─ SELECT * FROM drone                            │
-│     │     WHERE status = 'IDLE' LIMIT 1                  │
+│     │     WHERE store_id = ? AND status = 'IDLE'         │
+│     │     LIMIT 1                                        │
 │     │                                                    │
 │     ├─ 경로 최적화 (TSP)                                  │
 │     │  └─ RouteOptimizerService.optimizeRoute()         │

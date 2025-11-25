@@ -1284,11 +1284,17 @@ public void simulateFlight(Long routeId) {
 
 ---
 
-**문서 버전**: 7.0
+**문서 버전**: 8.0
 **최종 수정일**: 2025-11-25
 **작성자**: Backend Development Team
 
 **변경 이력**
+- v8.0 (2025-11-25): 드론-매장 소속 관계 추가 ⭐
+  - **Drone-Store 관계 추가**: Drone 엔티티에 store_id FK 추가 (Drone N:1 Store)
+  - **배치 처리 로직 개선**: 각 매장의 주문을 해당 매장 소속 드론만 처리하도록 변경
+  - **데모 데이터 확장**: 드론 10대 → 40대로 증가 (각 매장당 1대씩 배치)
+  - **DroneRepository 메서드 추가**: `findFirstByStoreAndStatus()` - 매장별 드론 조회
+  - **현실성 향상**: 드론이 자신의 소속 매장 주문만 배송하도록 개선
 - v7.0 (2025-11-25): 데이터베이스 스키마 리팩토링 - Customer/User 통합 ⭐⭐
   - **Customer 테이블 삭제**: User 테이블로 통합 (role 필드 추가: CUSTOMER, OWNER)
   - **Store-Owner 관계 추가**: Store 엔티티에 owner_id FK 추가 (Store ↔ User(OWNER) 관계)

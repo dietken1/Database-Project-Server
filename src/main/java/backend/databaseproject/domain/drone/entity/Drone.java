@@ -1,5 +1,6 @@
 package backend.databaseproject.domain.drone.entity;
 
+import backend.databaseproject.domain.store.entity.Store;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -22,6 +23,10 @@ public class Drone {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "drone_id")
     private Long droneId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;
 
     @Column(nullable = false, length = 40)
     private String model;
@@ -47,7 +52,8 @@ public class Drone {
     }
 
     @Builder
-    public Drone(String model, Integer batteryCapacity, BigDecimal maxPayloadKg, DroneStatus status) {
+    public Drone(Store store, String model, Integer batteryCapacity, BigDecimal maxPayloadKg, DroneStatus status) {
+        this.store = store;
         this.model = model;
         this.batteryCapacity = batteryCapacity;
         this.maxPayloadKg = maxPayloadKg;

@@ -80,21 +80,21 @@ public class DeliveryBatchService {
 
                 log.info("매장 ID {} 처리 시작 - 배송 요청: {}건", storeId, orders.size());
 
-                // 대기 중인 드론 조회
-                Drone availableDrone = droneRepository.findFirstByStatus(DroneStatus.IDLE)
-                        .orElse(null);
-
-                if (availableDrone == null) {
-                    log.warn("사용 가능한 드론이 없습니다. 매장 ID {} 스킵", storeId);
-                    continue;
-                }
-
-                log.info("드론 할당 - DroneId: {}, Model: {}",
-                        availableDrone.getDroneId(), availableDrone.getModel());
-
                 // 매장 조회
                 Store store = storeRepository.findById(storeId)
                         .orElseThrow(() -> new IllegalArgumentException("Store not found: " + storeId));
+
+                // 해당 매장의 대기 중인 드론 조회
+                Drone availableDrone = droneRepository.findFirstByStoreAndStatus(store, DroneStatus.IDLE)
+                        .orElse(null);
+
+                if (availableDrone == null) {
+                    log.warn("매장 ID {}에 사용 가능한 드론이 없습니다. 스킵", storeId);
+                    continue;
+                }
+
+                log.info("드론 할당 - DroneId: {}, Model: {}, Store: {}",
+                        availableDrone.getDroneId(), availableDrone.getModel(), store.getName());
 
                 // 경로 최적화
                 List<Order> optimizedOrders = routeOptimizerService.optimizeRoute(orders, store);
