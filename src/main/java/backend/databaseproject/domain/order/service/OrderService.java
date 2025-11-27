@@ -200,4 +200,35 @@ public class OrderService {
 
         return OrderResponse.from(order, routeId);
     }
+
+    /**
+     * 특정 가게의 주문 목록 조회
+     * storeId로 가게의 주문들을 조회합니다.
+     * status 파라미터가 제공되면 해당 상태의 주문만 필터링합니다.
+     * status가 null이면 모든 주문을 반환합니다.
+     */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getStoreOrders(Long storeId, OrderStatus status) {
+        // Store 존재 확인
+        storeRepository.findById(storeId)
+                .orElseThrow(() -> new BaseException(ErrorCode.STORE_NOT_FOUND));
+
+        // 주문 조회 (상태별 필터링 또는 전체)
+        List<Order> orders;
+        if (status != null) {
+            orders = orderRepository.findByStoreStoreIdAndStatus(storeId, status);
+        } else {
+            orders = orderRepository.findAll().stream()
+                    .filter(order -> order.getStore().getStoreId().equals(storeId))
+                    .toList();
+        }
+
+        // OrderResponse로 변환
+        return orders.stream()
+                .map(order -> {
+                    Long routeId = routeStopOrderRepository.findRouteIdByOrderId(order.getOrderId()).orElse(null);
+                    return OrderResponse.from(order, routeId);
+                })
+                .toList();
+    }
 }

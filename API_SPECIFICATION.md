@@ -51,6 +51,9 @@ http://localhost:8080/api
 ## 📑 목차
 
 1. [주문 (Order) API](#1-주문-order-api)
+   - 1.1 [주문 생성](#11-주문-생성)
+   - 1.2 [주문 조회](#12-주문-조회)
+   - 1.3 [가게별 주문 목록 조회](#13-가게별-주문-목록-조회)
 2. [매장 (Store) API](#2-매장-store-api)
 3. [배송 경로 (Route) API](#3-배송-경로-route-api)
 4. [상태 코드 및 Enum](#4-상태-코드-및-enum)
@@ -211,6 +214,116 @@ stompClient.subscribe('/topic/order/1', (message) => {
 
 **Error Responses**
 - `404 Not Found`: 주문을 찾을 수 없음
+- `500 Internal Server Error`: 서버 내부 오류
+
+---
+
+### 1.3 가게별 주문 목록 조회
+
+**GET** `/orders/store/{storeId}`
+
+특정 가게로 들어온 주문 목록을 조회합니다. 점주가 자신의 가게에 쌓인 주문들을 확인하고 배송할 주문을 선택할 때 사용합니다.
+`status` 파라미터로 특정 상태의 주문만 필터링할 수 있습니다.
+
+**Path Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| storeId | Long | O | 가게 ID | 1 |
+
+**Query Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| status | String | X | 주문 상태 필터 (CREATED, ASSIGNED, FULFILLED, CANCELED, FAILED) | CREATED |
+
+**Response (200 OK)**
+```json
+[
+  {
+    "orderId": 1,
+    "storeId": 1,
+    "storeName": "편의점A",
+    "totalAmount": 15000,
+    "status": "CREATED",
+    "createdAt": "2024-01-15T14:00:00",
+    "assignedAt": null,
+    "completedAt": null,
+    "items": [
+      {
+        "orderItemId": 1,
+        "productId": 1,
+        "productName": "아메리카노",
+        "quantity": 2,
+        "unitPrice": 3000,
+        "subtotal": 6000
+      }
+    ],
+    "note": "조심스럽게 배송해주세요.",
+    "routeId": null
+  },
+  {
+    "orderId": 2,
+    "storeId": 1,
+    "storeName": "편의점A",
+    "totalAmount": 8000,
+    "status": "CREATED",
+    "createdAt": "2024-01-15T14:05:00",
+    "assignedAt": null,
+    "completedAt": null,
+    "items": [
+      {
+        "orderItemId": 2,
+        "productId": 3,
+        "productName": "초코우유",
+        "quantity": 2,
+        "unitPrice": 2500,
+        "subtotal": 5000
+      }
+    ],
+    "note": null,
+    "routeId": null
+  }
+]
+```
+
+**Response 필드 설명**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| orderId | Long | O | 주문 ID | 1 |
+| storeId | Long | O | 매장 ID | 1 |
+| storeName | String | O | 매장명 | "편의점A" |
+| totalAmount | Integer | O | 총 금액 (원) | 15000 |
+| status | String | O | 주문 상태 | "CREATED" |
+| createdAt | DateTime | O | 주문 생성 시간 | "2024-01-15T14:00:00" |
+| assignedAt | DateTime | X | 배송 할당 시간 | null |
+| completedAt | DateTime | X | 배송 완료 시간 | null |
+| items | Array | O | 주문 항목 목록 | - |
+| items[].orderItemId | Long | O | 주문 항목 ID | 1 |
+| items[].productId | Long | O | 상품 ID | 1 |
+| items[].productName | String | O | 상품명 | "아메리카노" |
+| items[].quantity | Integer | O | 주문 수량 | 2 |
+| items[].unitPrice | Integer | O | 단가 (원) | 3000 |
+| items[].subtotal | Integer | O | 소계 (원) | 6000 |
+| note | String | X | 주문 메모 | "조심스럽게 배송해주세요." |
+| routeId | Long | X | 배송 경로 ID (배송 할당 후) | null |
+
+**사용 예시**
+
+```http
+# 전체 주문 조회
+GET /api/orders/store/1
+
+# 배송 대기 중인 주문만 조회 (점주가 배송 시작할 주문 선택용)
+GET /api/orders/store/1?status=CREATED
+
+# 배송 완료된 주문만 조회
+GET /api/orders/store/1?status=FULFILLED
+```
+
+**Error Responses**
+- `404 Not Found`: 가게를 찾을 수 없음
 - `500 Internal Server Error`: 서버 내부 오류
 
 ---
@@ -865,10 +978,34 @@ GET /api/orders/1
 
 ### 🏪 시나리오 2: 점주의 배송 시작 및 실시간 모니터링
 
-#### Step 1: 점주가 배송 시작 요청
+#### Step 1: 점주가 대기 중인 주문 목록 조회
 
 **클라이언트 동작**
-- 점주가 관리자 페이지에서 대기 중인 주문 목록 확인
+- 점주가 관리자 페이지 접속
+- 자신의 가게로 들어온 주문 목록 확인
+
+**API 요청**
+```http
+GET /api/orders/store/1?status=CREATED
+```
+
+**서버 로직**
+1. `OrderController.getStoreOrders()` 호출
+2. `OrderService.getStoreOrders(storeId=1, status=CREATED)` 실행
+3. 매장 존재 확인
+4. `OrderRepository.findByStoreStoreIdAndStatus()` - 해당 가게의 CREATED 상태 주문 조회
+5. 각 주문을 `OrderResponse`로 변환하여 반환
+
+**클라이언트 화면**
+- 대기 중인 주문 목록 테이블
+- 각 주문: 주문번호, 주문시간, 상품목록, 총금액 표시
+- 체크박스로 배송할 주문 선택 (최대 3개)
+
+---
+
+#### Step 2: 점주가 배송 시작 요청
+
+**클라이언트 동작**
 - 배송할 주문 선택 (최대 3개)
 - "배송 시작" 버튼 클릭
 
@@ -954,7 +1091,7 @@ Content-Type: application/json
 
 ---
 
-#### Step 2: 드론 시뮬레이터 동작
+#### Step 3: 드론 시뮬레이터 동작
 
 **서버 로직 (비동기 실행)**
 
@@ -1042,7 +1179,7 @@ Content-Type: application/json
 
 ---
 
-#### Step 3: 점주의 실시간 모니터링
+#### Step 4: 점주의 실시간 모니터링
 
 **클라이언트 동작 (WebSocket 연결)**
 
@@ -1088,7 +1225,7 @@ GET /api/routes/1/current-position
 
 ---
 
-#### Step 4: 진행 중인 배송 목록 조회
+#### Step 5: 진행 중인 배송 목록 조회
 
 **API 요청**
 ```http
@@ -1315,7 +1452,7 @@ public void simulateFlight(Long routeId) {
 
 ### 점주 앱 플로우
 ```
-1. 대기 중인 주문 목록 확인
+1. GET /api/orders/store/1?status=CREATED (대기 중인 주문 목록 조회)
 2. POST /api/routes/start-delivery { "orderIds": [1,2,3] } (선택한 주문 배송 시작)
 3. GET /api/routes/active (진행 중인 배송 조회)
 4. WebSocket 구독: /topic/route/{routeId} (실시간 위치)
@@ -1349,11 +1486,16 @@ public void simulateFlight(Long routeId) {
 
 ---
 
-**문서 버전**: 9.0
-**최종 수정일**: 2025-11-26
+**문서 버전**: 9.1
+**최종 수정일**: 2025-11-27
 **작성자**: Backend Development Team
 
 **변경 이력**
+- v9.1 (2025-11-27): 가게별 주문 목록 조회 API 추가 ⭐
+  - **신규 API 추가**: `GET /api/orders/store/{storeId}` - 특정 가게의 주문 목록 조회
+  - **상태 필터링 지원**: `status` 쿼리 파라미터로 주문 상태 필터링 가능 (CREATED, ASSIGNED, FULFILLED, CANCELED, FAILED)
+  - **점주 앱 플로우 개선**: 점주가 자신의 가게에 들어온 주문들을 조회하고 배송할 주문 선택 가능
+  - **사용 예시 추가**: 배송 대기 중인 주문만 조회하는 케이스 추가
 - v9.0 (2025-11-26): 배송 시작 API 변경 - 점주 선택 방식으로 전환 ⭐⭐⭐
   - **배송 시작 API 변경**: 점주가 주문 ID를 선택하여 배송 시작 (최대 3개)
   - **Request DTO 추가**: `StartDeliveryRequest` - orderIds 리스트 (최소 1개, 최대 3개)

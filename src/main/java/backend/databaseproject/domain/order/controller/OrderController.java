@@ -3,6 +3,7 @@ package backend.databaseproject.domain.order.controller;
 import backend.databaseproject.domain.order.dto.request.OrderCreateRequest;
 import backend.databaseproject.domain.order.dto.response.OrderCreateResponse;
 import backend.databaseproject.domain.order.dto.response.OrderResponse;
+import backend.databaseproject.domain.order.entity.OrderStatus;
 import backend.databaseproject.domain.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -15,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 주문 API Controller
@@ -96,5 +99,42 @@ public class OrderController {
     ) {
         OrderResponse orderResponse = orderService.getOrder(orderId);
         return ResponseEntity.ok(orderResponse);
+    }
+
+    /**
+     * 가게별 주문 목록 조회
+     * 특정 가게에 들어온 주문들을 조회합니다.
+     * status 파라미터로 주문 상태를 필터링할 수 있습니다.
+     */
+    @GetMapping("/store/{storeId}")
+    @Operation(
+            summary = "가게별 주문 목록 조회",
+            description = "특정 가게에 들어온 주문들을 조회합니다. status 파라미터로 주문 상태를 필터링할 수 있습니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "주문 목록 조회 성공",
+                    content = @Content(schema = @Schema(implementation = OrderResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "가게를 찾을 수 없음"
+            ),
+            @ApiResponse(
+                    responseCode = "500",
+                    description = "서버 내부 오류"
+            )
+    })
+    public ResponseEntity<List<OrderResponse>> getStoreOrders(
+            @PathVariable("storeId")
+            @Schema(description = "가게 ID", example = "1")
+            Long storeId,
+            @RequestParam(value = "status", required = false)
+            @Schema(description = "주문 상태 필터 (CREATED, ASSIGNED, FULFILLED, CANCELED, FAILED)", example = "CREATED")
+            OrderStatus status
+    ) {
+        List<OrderResponse> orders = orderService.getStoreOrders(storeId, status);
+        return ResponseEntity.ok(orders);
     }
 }
