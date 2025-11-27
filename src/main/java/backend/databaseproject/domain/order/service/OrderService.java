@@ -7,6 +7,7 @@ import backend.databaseproject.domain.order.dto.response.OrderCreateResponse;
 import backend.databaseproject.domain.order.dto.response.OrderResponse;
 import backend.databaseproject.domain.order.entity.Order;
 import backend.databaseproject.domain.order.entity.OrderItem;
+import backend.databaseproject.domain.order.entity.OrderStatus;
 import backend.databaseproject.domain.order.repository.OrderRepository;
 import backend.databaseproject.domain.order.repository.OrderItemRepository;
 import backend.databaseproject.domain.product.entity.Product;
