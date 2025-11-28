@@ -50,20 +50,68 @@ http://localhost:8080/api
 
 ## 📑 목차
 
-1. [주문 (Order) API](#1-주문-order-api)
-   - 1.1 [주문 생성](#11-주문-생성)
-   - 1.2 [주문 조회](#12-주문-조회)
-   - 1.3 [가게별 주문 목록 조회](#13-가게별-주문-목록-조회)
-2. [매장 (Store) API](#2-매장-store-api)
-3. [배송 경로 (Route) API](#3-배송-경로-route-api)
-4. [상태 코드 및 Enum](#4-상태-코드-및-enum)
-5. [데모 시나리오](#5-데모-시나리오)
+1. [사용자 (User) API](#1-사용자-user-api)
+   - 1.1 [내 정보 조회](#11-내-정보-조회)
+2. [주문 (Order) API](#2-주문-order-api)
+   - 2.1 [주문 생성](#21-주문-생성)
+   - 2.2 [주문 조회](#22-주문-조회)
+3. [매장 (Store) API](#3-매장-store-api)
+   - 3.1 [배달 가능한 매장 조회](#31-배달-가능한-매장-조회)
+   - 3.2 [매장 검색](#32-매장-검색)
+   - 3.3 [배송 정보 조회](#33-배송-정보-조회)
+   - 3.4 [매장 카테고리 목록 조회](#34-매장-카테고리-목록-조회)
+   - 3.5 [매장 상품 목록 조회](#35-매장-상품-목록-조회)
+   - 3.6 [가게별 주문 목록 조회](#36-가게별-주문-목록-조회)
+4. [배송 경로 (Route) API](#4-배송-경로-route-api)
+5. [상태 코드 및 Enum](#5-상태-코드-및-enum)
+6. [데모 시나리오](#6-데모-시나리오)
 
 ---
 
-## 1. 주문 (Order) API
+## 1. 사용자 (User) API
 
-### 1.1 주문 생성
+### 1.1 내 정보 조회
+
+**GET** `/users/me`
+
+요청 헤더의 userId를 통해 사용자의 이름, 주소, 위치 정보를 조회합니다.
+매장 검색 시 사용자 위치를 자동으로 사용하거나, 배송지 정보를 표시할 때 활용됩니다.
+
+**Request Headers**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| userId | Long | O | 사용자 ID | 1 |
+
+**Response (200 OK)**
+```json
+{
+  "name": "홍길동",
+  "address": "서울시 강남구 테헤란로 123",
+  "lat": 37.5665,
+  "lng": 126.9780
+}
+```
+
+**Response 필드 설명**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| name | String | O | 사용자명 | "홍길동" |
+| address | String | O | 배송 주소 | "서울시 강남구 테헤란로 123" |
+| lat | BigDecimal | O | 위도 | 37.5665 |
+| lng | BigDecimal | O | 경도 | 126.9780 |
+
+**Error Responses**
+- `400 Bad Request`: 잘못된 요청
+  - `USER_NOT_FOUND`: 존재하지 않는 사용자
+- `500 Internal Server Error`: 서버 내부 오류
+
+---
+
+## 2. 주문 (Order) API
+
+### 2.1 주문 생성
 
 **POST** `/orders`
 
@@ -130,7 +178,7 @@ http://localhost:8080/api
 
 ---
 
-### 1.2 주문 조회
+### 2.2 주문 조회
 
 **GET** `/orders/{orderId}`
 
@@ -218,9 +266,216 @@ stompClient.subscribe('/topic/order/1', (message) => {
 
 ---
 
-### 1.3 가게별 주문 목록 조회
+## 3. 매장 (Store) API
 
-**GET** `/orders/store/{storeId}`
+### 3.1 배달 가능한 매장 조회
+
+**GET** `/stores`
+
+사용자 위치를 기반으로 **배달 가능한** 매장 목록을 조회합니다.
+각 매장은 자체적으로 배달 가능 거리(`deliveryRadiusKm`)를 가지고 있으며, 사용자 위치가 해당 거리 내에 있는 매장만 반환됩니다.
+
+**Query Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| lat | BigDecimal | O | 사용자 위도 | 37.4979 |
+| lng | BigDecimal | O | 사용자 경도 | 127.0276 |
+
+> **동작 방식**:
+> - 각 매장의 `deliveryRadiusKm` 내에 사용자가 있는지 확인
+> - 배달 가능한 매장만 거리순으로 정렬하여 반환
+> - 성능 최적화를 위해 내부적으로 최대 50km 반경 내에서만 검색
+>
+> **예시**:
+> - 사용자 위치에서 1.5km 떨어진 매장A (deliveryRadiusKm: 2.0km) → ✅ 반환됨
+> - 사용자 위치에서 3.0km 떨어진 매장B (deliveryRadiusKm: 2.0km) → ❌ 배달 불가로 제외됨
+
+**Response (200 OK)**
+```json
+[
+  {
+    "storeId": 1,
+    "name": "편의점A",
+    "type": "CONVENIENCE",
+    "phone": "02-1234-5678",
+    "address": "서울시 강남구 테헤란로 123",
+    "lat": 37.494095,
+    "lng": 127.027610,
+    "deliveryRadiusKm": 2.00,
+    "distanceKm": 1.50
+  }
+]
+```
+
+**Error Responses**
+- `400 Bad Request`: 잘못된 요청 (필수 파라미터 누락 등)
+
+---
+
+### 3.2 매장 검색 (NEW)
+
+**GET** `/stores/search`
+
+매장명으로 매장을 검색합니다 (부분 일치).
+사용자 위치 정보를 제공하면 거리를 계산하고, **각 매장의 배달 가능 거리 내에 있는 매장만** 반환합니다.
+
+**Query Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| name | String | O | 매장명 (부분 일치) | "편의점" |
+| lat | BigDecimal | X | 사용자 위도 (거리 계산 및 배달 가능 여부 필터링용) | 37.4979 |
+| lng | BigDecimal | X | 사용자 경도 (거리 계산 및 배달 가능 여부 필터링용) | 127.0276 |
+
+> **참고**: `lat`/`lng`를 제공하지 않으면 모든 검색 결과가 반환되지만, 제공하면 배달 가능한 매장만 필터링됩니다.
+
+**Response (200 OK)**
+```json
+[
+  {
+    "storeId": 1,
+    "name": "편의점A 수원점",
+    "type": "CONVENIENCE",
+    "phone": "031-1234-5678",
+    "address": "경기도 수원시 영통구...",
+    "lat": 37.494095,
+    "lng": 127.027610,
+    "deliveryRadiusKm": 2.00,
+    "distanceKm": 1.50
+  }
+]
+```
+
+---
+
+### 3.3 배송 정보 조회 **(NEW)**
+
+**GET** `/stores/{storeId}/delivery-info`
+
+주문 전 검증에 필요한 배송 정보를 조회합니다.
+**프론트엔드에서 이 정보를 사용하여 장바구니 무게 제한 및 배송 가능 여부를 실시간 검증할 수 있습니다.**
+
+**Path Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| storeId | Long | O | 매장 ID | 1 |
+
+**Query Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| lat | BigDecimal | X | 사용자 위도 (거리 및 배송 가능 여부 계산용) | 37.4979 |
+| lng | BigDecimal | X | 사용자 경도 (거리 및 배송 가능 여부 계산용) | 127.0276 |
+
+**Response (200 OK)**
+```json
+{
+  "storeId": 1,
+  "storeName": "편의점A",
+  "deliveryRadiusKm": 2.00,
+  "maxWeightKg": 5.000,
+  "isDeliverable": true,
+  "distanceKm": 1.50
+}
+```
+
+**Response 필드 설명**
+
+| 필드 | 타입 | 설명 | 예시 |
+|------|------|------|------|
+| storeId | Long | 매장 ID | 1 |
+| storeName | String | 매장명 | "편의점A" |
+| deliveryRadiusKm | BigDecimal | 매장 배송 가능 반경 (km) | 2.00 |
+| maxWeightKg | BigDecimal | 시스템 드론 최대 적재 무게 (kg) | 5.000 |
+| isDeliverable | Boolean | 배송 가능 여부 (위치 제공 시) | true |
+| distanceKm | BigDecimal | 매장-사용자 간 거리 (위치 제공 시) | 1.50 |
+
+> **프론트엔드 활용 예시**:
+> - `maxWeightKg`로 장바구니 무게 제한 검증
+> - `deliveryRadiusKm`과 `distanceKm`으로 배송 가능 여부 표시
+> - `isDeliverable=false`면 "배송 불가 지역입니다" 경고 표시
+
+**Error Responses**
+- `404 Not Found`: 존재하지 않는 매장
+- `400 Bad Request`: 운영 중이지 않은 매장
+
+---
+
+### 3.4 매장 카테고리 목록 조회
+
+**GET** `/stores/{storeId}/categories`
+
+특정 매장에서 판매 중인 상품의 카테고리 목록을 조회합니다.
+
+**Path Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| storeId | Long | O | 매장 ID | 1 |
+
+**Response (200 OK)**
+```json
+[
+  {
+    "category": "음료"
+  },
+  {
+    "category": "스낵"
+  }
+]
+```
+
+**Error Responses**
+- `404 Not Found`: 존재하지 않는 매장
+- `400 Bad Request`: 운영 중이지 않은 매장
+
+---
+
+### 3.5 매장 상품 목록 조회
+
+**GET** `/stores/{storeId}/products`
+
+특정 매장의 상품 목록을 조회합니다.
+**카테고리 파라미터가 제공되면 해당 카테고리의 상품만, 제공되지 않으면 모든 판매 중인 상품을 조회합니다.**
+
+**Path Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| storeId | Long | O | 매장 ID | 1 |
+
+**Query Parameters**
+
+| 필드 | 타입 | 필수 | 설명 | 예시 |
+|------|------|------|------|------|
+| category | String | X | 카테고리 필터 | "음료" |
+
+**Response (200 OK)**
+```json
+[
+  {
+    "productId": 1,
+    "name": "초코우유",
+    "category": "음료",
+    "unitWeightKg": 0.200,
+    "price": 2500,
+    "stockQty": 50,
+    "maxQtyPerOrder": 10
+  }
+]
+```
+
+**Error Responses**
+- `404 Not Found`: 존재하지 않는 매장
+- `400 Bad Request`: 운영 중이지 않은 매장
+
+---
+
+### 3.6 가게별 주문 목록 조회
+
+**GET** `/stores/{storeId}/orders`
 
 특정 가게로 들어온 주문 목록을 조회합니다. 점주가 자신의 가게에 쌓인 주문들을 확인하고 배송할 주문을 선택할 때 사용합니다.
 `status` 파라미터로 특정 상태의 주문만 필터링할 수 있습니다.
@@ -313,13 +568,13 @@ stompClient.subscribe('/topic/order/1', (message) => {
 
 ```http
 # 전체 주문 조회
-GET /api/orders/store/1
+GET /api/stores/1/orders
 
 # 배송 대기 중인 주문만 조회 (점주가 배송 시작할 주문 선택용)
-GET /api/orders/store/1?status=CREATED
+GET /api/stores/1/orders?status=CREATED
 
 # 배송 완료된 주문만 조회
-GET /api/orders/store/1?status=FULFILLED
+GET /api/stores/1/orders?status=FULFILLED
 ```
 
 **Error Responses**
@@ -328,216 +583,9 @@ GET /api/orders/store/1?status=FULFILLED
 
 ---
 
-## 2. 매장 (Store) API
+## 4. 배송 경로 (Route) API
 
-### 2.1 배달 가능한 매장 조회
-
-**GET** `/stores`
-
-사용자 위치를 기반으로 **배달 가능한** 매장 목록을 조회합니다.
-각 매장은 자체적으로 배달 가능 거리(`deliveryRadiusKm`)를 가지고 있으며, 사용자 위치가 해당 거리 내에 있는 매장만 반환됩니다.
-
-**Query Parameters**
-
-| 필드 | 타입 | 필수 | 설명 | 예시 |
-|------|------|------|------|------|
-| lat | BigDecimal | O | 사용자 위도 | 37.4979 |
-| lng | BigDecimal | O | 사용자 경도 | 127.0276 |
-
-> **동작 방식**:
-> - 각 매장의 `deliveryRadiusKm` 내에 사용자가 있는지 확인
-> - 배달 가능한 매장만 거리순으로 정렬하여 반환
-> - 성능 최적화를 위해 내부적으로 최대 50km 반경 내에서만 검색
->
-> **예시**:
-> - 사용자 위치에서 1.5km 떨어진 매장A (deliveryRadiusKm: 2.0km) → ✅ 반환됨
-> - 사용자 위치에서 3.0km 떨어진 매장B (deliveryRadiusKm: 2.0km) → ❌ 배달 불가로 제외됨
-
-**Response (200 OK)**
-```json
-[
-  {
-    "storeId": 1,
-    "name": "편의점A",
-    "type": "CONVENIENCE",
-    "phone": "02-1234-5678",
-    "address": "서울시 강남구 테헤란로 123",
-    "lat": 37.494095,
-    "lng": 127.027610,
-    "deliveryRadiusKm": 2.00,
-    "distanceKm": 1.50
-  }
-]
-```
-
-**Error Responses**
-- `400 Bad Request`: 잘못된 요청 (필수 파라미터 누락 등)
-
----
-
-### 2.2 매장 검색 (NEW)
-
-**GET** `/stores/search`
-
-매장명으로 매장을 검색합니다 (부분 일치).
-사용자 위치 정보를 제공하면 거리를 계산하고, **각 매장의 배달 가능 거리 내에 있는 매장만** 반환합니다.
-
-**Query Parameters**
-
-| 필드 | 타입 | 필수 | 설명 | 예시 |
-|------|------|------|------|------|
-| name | String | O | 매장명 (부분 일치) | "편의점" |
-| lat | BigDecimal | X | 사용자 위도 (거리 계산 및 배달 가능 여부 필터링용) | 37.4979 |
-| lng | BigDecimal | X | 사용자 경도 (거리 계산 및 배달 가능 여부 필터링용) | 127.0276 |
-
-> **참고**: `lat`/`lng`를 제공하지 않으면 모든 검색 결과가 반환되지만, 제공하면 배달 가능한 매장만 필터링됩니다.
-
-**Response (200 OK)**
-```json
-[
-  {
-    "storeId": 1,
-    "name": "편의점A 수원점",
-    "type": "CONVENIENCE",
-    "phone": "031-1234-5678",
-    "address": "경기도 수원시 영통구...",
-    "lat": 37.494095,
-    "lng": 127.027610,
-    "deliveryRadiusKm": 2.00,
-    "distanceKm": 1.50
-  }
-]
-```
-
----
-
-### 2.3 배송 정보 조회 **(NEW)**
-
-**GET** `/stores/{storeId}/delivery-info`
-
-주문 전 검증에 필요한 배송 정보를 조회합니다.
-**프론트엔드에서 이 정보를 사용하여 장바구니 무게 제한 및 배송 가능 여부를 실시간 검증할 수 있습니다.**
-
-**Path Parameters**
-
-| 필드 | 타입 | 필수 | 설명 | 예시 |
-|------|------|------|------|------|
-| storeId | Long | O | 매장 ID | 1 |
-
-**Query Parameters**
-
-| 필드 | 타입 | 필수 | 설명 | 예시 |
-|------|------|------|------|------|
-| lat | BigDecimal | X | 사용자 위도 (거리 및 배송 가능 여부 계산용) | 37.4979 |
-| lng | BigDecimal | X | 사용자 경도 (거리 및 배송 가능 여부 계산용) | 127.0276 |
-
-**Response (200 OK)**
-```json
-{
-  "storeId": 1,
-  "storeName": "편의점A",
-  "deliveryRadiusKm": 2.00,
-  "maxWeightKg": 5.000,
-  "isDeliverable": true,
-  "distanceKm": 1.50
-}
-```
-
-**Response 필드 설명**
-
-| 필드 | 타입 | 설명 | 예시 |
-|------|------|------|------|
-| storeId | Long | 매장 ID | 1 |
-| storeName | String | 매장명 | "편의점A" |
-| deliveryRadiusKm | BigDecimal | 매장 배송 가능 반경 (km) | 2.00 |
-| maxWeightKg | BigDecimal | 시스템 드론 최대 적재 무게 (kg) | 5.000 |
-| isDeliverable | Boolean | 배송 가능 여부 (위치 제공 시) | true |
-| distanceKm | BigDecimal | 매장-사용자 간 거리 (위치 제공 시) | 1.50 |
-
-> **프론트엔드 활용 예시**:
-> - `maxWeightKg`로 장바구니 무게 제한 검증
-> - `deliveryRadiusKm`과 `distanceKm`으로 배송 가능 여부 표시
-> - `isDeliverable=false`면 "배송 불가 지역입니다" 경고 표시
-
-**Error Responses**
-- `404 Not Found`: 존재하지 않는 매장
-- `400 Bad Request`: 운영 중이지 않은 매장
-
----
-
-### 2.4 매장 카테고리 목록 조회
-
-**GET** `/stores/{storeId}/categories`
-
-특정 매장에서 판매 중인 상품의 카테고리 목록을 조회합니다.
-
-**Path Parameters**
-
-| 필드 | 타입 | 필수 | 설명 | 예시 |
-|------|------|------|------|------|
-| storeId | Long | O | 매장 ID | 1 |
-
-**Response (200 OK)**
-```json
-[
-  {
-    "category": "음료"
-  },
-  {
-    "category": "스낵"
-  }
-]
-```
-
-**Error Responses**
-- `404 Not Found`: 존재하지 않는 매장
-- `400 Bad Request`: 운영 중이지 않은 매장
-
----
-
-### 2.5 매장 상품 목록 조회
-
-**GET** `/stores/{storeId}/products`
-
-특정 매장의 상품 목록을 조회합니다.
-**카테고리 파라미터가 제공되면 해당 카테고리의 상품만, 제공되지 않으면 모든 판매 중인 상품을 조회합니다.**
-
-**Path Parameters**
-
-| 필드 | 타입 | 필수 | 설명 | 예시 |
-|------|------|------|------|------|
-| storeId | Long | O | 매장 ID | 1 |
-
-**Query Parameters**
-
-| 필드 | 타입 | 필수 | 설명 | 예시 |
-|------|------|------|------|------|
-| category | String | X | 카테고리 필터 | "음료" |
-
-**Response (200 OK)**
-```json
-[
-  {
-    "productId": 1,
-    "name": "초코우유",
-    "category": "음료",
-    "unitWeightKg": 0.200,
-    "price": 2500,
-    "stockQty": 50,
-    "maxQtyPerOrder": 10
-  }
-]
-```
-
-**Error Responses**
-- `404 Not Found`: 존재하지 않는 매장
-- `400 Bad Request`: 운영 중이지 않은 매장
-
----
-
-## 3. 배송 경로 (Route) API
-
-### 3.1 경로 상세 조회
+### 4.1 경로 상세 조회
 
 **GET** `/routes/{routeId}`
 
@@ -604,7 +652,7 @@ GET /api/orders/store/1?status=FULFILLED
 
 ---
 
-### 3.2 드론 현재 위치 조회
+### 4.2 드론 현재 위치 조회
 
 **GET** `/routes/{routeId}/current-position`
 
@@ -633,7 +681,7 @@ GET /api/orders/store/1?status=FULFILLED
 
 ---
 
-### 3.3 진행 중인 배송 목록 조회
+### 4.3 진행 중인 배송 목록 조회
 
 **GET** `/routes/active`
 
@@ -664,7 +712,7 @@ GET /api/orders/store/1?status=FULFILLED
 
 ---
 
-### 3.4 배송 시작
+### 4.4 배송 시작
 
 **POST** `/routes/start-delivery`
 
@@ -716,7 +764,7 @@ GET /api/orders/store/1?status=FULFILLED
 
 ---
 
-### 3.5 배송 배치 처리 (전체 자동)
+### 4.5 배송 배치 처리 (전체 자동)
 
 **POST** `/routes/batch-delivery`
 
@@ -745,7 +793,7 @@ GET /api/orders/store/1?status=FULFILLED
 
 ---
 
-## 4. 상태 코드 및 Enum
+## 5. 상태 코드 및 Enum
 
 ### HTTP 상태 코드
 
@@ -805,7 +853,7 @@ GET /api/orders/store/1?status=FULFILLED
 
 ---
 
-## 5. 데모 시나리오
+## 6. 데모 시나리오
 
 이 섹션에서는 드론 배송 시스템의 전체 플로우를 클라이언트 요청과 서버 로직을 혼합하여 설명합니다.
 
@@ -986,11 +1034,11 @@ GET /api/orders/1
 
 **API 요청**
 ```http
-GET /api/orders/store/1?status=CREATED
+GET /api/stores/1/orders?status=CREATED
 ```
 
 **서버 로직**
-1. `OrderController.getStoreOrders()` 호출
+1. `StoreController.getStoreOrders()` 호출
 2. `OrderService.getStoreOrders(storeId=1, status=CREATED)` 실행
 3. 매장 존재 확인
 4. `OrderRepository.findByStoreStoreIdAndStatus()` - 해당 가게의 CREATED 상태 주문 조회
@@ -1265,9 +1313,9 @@ GET /api/stores/search?name=편의점&lat=37.4979&lng=127.0276
 
 ---
 
-## 6. 주요 알고리즘 및 기술 상세
+## 7. 주요 알고리즘 및 기술 상세
 
-### 6.1 Haversine 공식 (거리 계산)
+### 7.1 Haversine 공식 (거리 계산)
 
 사용자 위치와 매장 간의 거리를 계산하는 알고리즘입니다.
 
@@ -1295,7 +1343,7 @@ public static double calculateDistance(
 
 ---
 
-### 6.2 Nearest Neighbor TSP 휴리스틱
+### 7.2 Nearest Neighbor TSP 휴리스틱
 
 배송 경로 최적화에 사용되는 알고리즘입니다.
 
@@ -1333,7 +1381,7 @@ OUTPUT: 최적화된 방문 순서
 
 ---
 
-### 6.3 선형 보간 (Linear Interpolation)
+### 7.3 선형 보간 (Linear Interpolation)
 
 드론이 두 지점 사이를 이동할 때 중간 위치를 계산합니다.
 
@@ -1357,7 +1405,7 @@ public static double[] interpolate(
 
 ---
 
-### 6.4 WebSocket 실시간 통신
+### 7.4 WebSocket 실시간 통신
 
 드론 위치를 실시간으로 브로드캐스트합니다.
 
@@ -1400,9 +1448,9 @@ stompClient.subscribe('/topic/route/1', (message) => {
 
 ---
 
-## 7. 성능 최적화 기법
+## 8. 성능 최적화 기법
 
-### 7.1 N+1 문제 해결
+### 8.1 N+1 문제 해결
 
 **문제**: RouteStops를 조회할 때 각 Stop마다 추가 쿼리 발생
 
@@ -1416,7 +1464,7 @@ Optional<Route> findByIdWithDetails(@Param("routeId") Long routeId);
 
 ---
 
-### 7.2 인덱스 활용
+### 8.2 인덱스 활용
 
 **거리 기반 검색 최적화**
 ```sql
@@ -1426,7 +1474,7 @@ CREATE INDEX idx_store_active ON store(is_active);
 
 ---
 
-### 7.3 비동기 처리
+### 8.3 비동기 처리
 
 드론 시뮬레이션은 별도 스레드에서 실행:
 ```java
@@ -1438,21 +1486,22 @@ public void simulateFlight(Long routeId) {
 
 ---
 
-## 8. API 사용 예시 요약
+## 9. API 사용 예시 요약
 
 ### 고객 앱 플로우
 ```
-1. GET /api/stores?lat=37.4979&lng=127.0276 (배달 가능한 매장 조회)
-2. GET /api/stores/1/delivery-info?lat=37.4979&lng=127.0276 (배송 정보 조회 - 무게 제한, 배송 가능 여부)
-3. GET /api/stores/1/categories (선택한 매장의 카테고리 조회)
-4. GET /api/stores/1/products?category=음료 (카테고리별 상품 조회)
-5. POST /api/orders (주문 생성 - 서버에서 무게/거리 검증)
-6. GET /api/orders/1 (폴링으로 상태 확인)
+1. GET /api/users/me (내 정보 조회 - 사용자 위치 및 배송지 정보)
+2. GET /api/stores?lat=37.4979&lng=127.0276 (배달 가능한 매장 조회)
+3. GET /api/stores/1/delivery-info?lat=37.4979&lng=127.0276 (배송 정보 조회 - 무게 제한, 배송 가능 여부)
+4. GET /api/stores/1/categories (선택한 매장의 카테고리 조회)
+5. GET /api/stores/1/products?category=음료 (카테고리별 상품 조회)
+6. POST /api/orders (주문 생성 - 서버에서 무게/거리 검증)
+7. GET /api/orders/1 (폴링으로 상태 확인)
 ```
 
 ### 점주 앱 플로우
 ```
-1. GET /api/orders/store/1?status=CREATED (대기 중인 주문 목록 조회)
+1. GET /api/stores/1/orders?status=CREATED (대기 중인 주문 목록 조회)
 2. POST /api/routes/start-delivery { "orderIds": [1,2,3] } (선택한 주문 배송 시작)
 3. GET /api/routes/active (진행 중인 배송 조회)
 4. WebSocket 구독: /topic/route/{routeId} (실시간 위치)
@@ -1468,7 +1517,7 @@ public void simulateFlight(Long routeId) {
 
 ---
 
-## 9. 참고사항
+## 10. 참고사항
 
 - 모든 날짜/시간은 ISO 8601 형식 (`yyyy-MM-dd'T'HH:mm:ss`)
 - 모든 거리는 킬로미터(km) 단위
@@ -1486,11 +1535,22 @@ public void simulateFlight(Long routeId) {
 
 ---
 
-**문서 버전**: 9.1
-**최종 수정일**: 2025-11-27
+**문서 버전**: 9.3
+**최종 수정일**: 2025-11-28
 **작성자**: Backend Development Team
 
 **변경 이력**
+- v9.3 (2025-11-28): 가게별 주문 조회 API 경로 리팩토링 ⭐⭐
+  - **엔드포인트 경로 변경**: `/orders/store/{storeId}` → `/stores/{storeId}/orders` (더 RESTful한 설계)
+  - **컨트롤러 이동**: OrderController → StoreController로 메서드 이동
+  - **목차 업데이트**: "가게별 주문 목록 조회"를 매장 API 섹션(3.6)으로 이동
+  - **사용 예시 업데이트**: 점주 앱 플로우 및 데모 시나리오의 경로 수정
+  - **리소스 계층 구조 개선**: 매장 하위 리소스로 주문을 표현하여 API 구조 명확화
+- v9.2 (2025-11-28): 사용자 API 섹션 추가 ⭐
+  - **신규 섹션 추가**: "1. 사용자 (User) API" - 기존 섹션 번호 재정렬
+  - **신규 API 문서화**: `GET /api/users/me` - 내 정보 조회 (이름, 주소, 위치)
+  - **사용 예시 추가**: 고객 앱 플로우에 사용자 정보 조회 단계 추가
+  - **목차 업데이트**: 사용자 API가 최상단에 위치하도록 재정렬
 - v9.1 (2025-11-27): 가게별 주문 목록 조회 API 추가 ⭐
   - **신규 API 추가**: `GET /api/orders/store/{storeId}` - 특정 가게의 주문 목록 조회
   - **상태 필터링 지원**: `status` 쿼리 파라미터로 주문 상태 필터링 가능 (CREATED, ASSIGNED, FULFILLED, CANCELED, FAILED)

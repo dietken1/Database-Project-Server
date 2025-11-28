@@ -1,5 +1,8 @@
 package backend.databaseproject.domain.store.controller;
 
+import backend.databaseproject.domain.order.dto.response.OrderResponse;
+import backend.databaseproject.domain.order.entity.OrderStatus;
+import backend.databaseproject.domain.order.service.OrderService;
 import backend.databaseproject.domain.store.dto.response.CategoryResponse;
 import backend.databaseproject.domain.store.dto.response.DeliveryInfoResponse;
 import backend.databaseproject.domain.store.dto.response.ProductResponse;
@@ -27,6 +30,7 @@ import java.util.List;
 public class StoreController {
 
     private final StoreService storeService;
+    private final OrderService orderService;
 
     /**
      * 주변 매장 조회
@@ -213,6 +217,46 @@ public class StoreController {
     ) {
         DeliveryInfoResponse deliveryInfo = storeService.getDeliveryInfo(storeId, lat, lng);
         return deliveryInfo;
+    }
+
+    /**
+     * 가게별 주문 목록 조회
+     * 특정 가게에 들어온 주문들을 조회합니다.
+     * status 파라미터로 주문 상태를 필터링할 수 있습니다.
+     *
+     * @param storeId 가게 ID
+     * @param status  주문 상태 필터 (선택)
+     * @return 주문 목록
+     */
+    @GetMapping("/{storeId}/orders")
+    @Operation(
+            summary = "가게별 주문 목록 조회",
+            description = "특정 가게에 들어온 주문들을 조회합니다. status 파라미터로 주문 상태를 필터링할 수 있습니다.",
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "주문 목록 조회 성공",
+                            content = @Content(schema = @Schema(implementation = OrderResponse.class))
+                    ),
+                    @ApiResponse(
+                            responseCode = "404",
+                            description = "가게를 찾을 수 없음"
+                    ),
+                    @ApiResponse(
+                            responseCode = "500",
+                            description = "서버 내부 오류"
+                    )
+            }
+    )
+    public List<OrderResponse> getStoreOrders(
+            @Parameter(name = "storeId", description = "가게 ID", required = true, example = "1")
+            @PathVariable Long storeId,
+
+            @Parameter(name = "status", description = "주문 상태 필터 (CREATED, ASSIGNED, FULFILLED, CANCELED, FAILED)", example = "CREATED")
+            @RequestParam(required = false) OrderStatus status
+    ) {
+        List<OrderResponse> orders = orderService.getStoreOrders(storeId, status);
+        return orders;
     }
 
 }
