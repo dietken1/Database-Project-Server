@@ -10,9 +10,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * 드론 엔티티
- */
 @Entity
 @Table(name = "drone")
 @Getter
@@ -59,10 +56,8 @@ public class Drone {
         this.maxPayloadKg = maxPayloadKg;
         this.status = status != null ? status : DroneStatus.IDLE;
     }
-
-    /**
-     * 드론 상태 변경
-     */
+    
+    // 드론 상태 변경
     public void changeStatus(DroneStatus newStatus) {
         this.status = newStatus;
     }

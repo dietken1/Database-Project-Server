@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 주문 서비스
@@ -190,10 +191,13 @@ public class OrderService {
      * OrderItem들도 함께 fetch
      * 배송이 할당된 경우 routeId도 함께 조회
      * OrderResponse로 변환하여 반환
+     *
+     * 최적화: JOIN FETCH를 사용하여 N+1 문제 방지
      */
     @Transactional(readOnly = true)
     public OrderResponse getOrder(Long orderId) {
-        Order order = orderRepository.findById(orderId)
+        // N+1 문제 해결: JOIN FETCH로 OrderItems, Product, Store, User를 함께 조회
+        Order order = orderRepository.findByIdWithDetails(orderId)
                 .orElseThrow(() -> new BaseException(ErrorCode.ORDER_NOT_FOUND));
 
         // 배송 경로 ID 조회 (배송이 할당되지 않은 경우 null)
@@ -207,6 +211,8 @@ public class OrderService {
      * storeId로 가게의 주문들을 조회합니다.
      * status 파라미터가 제공되면 해당 상태의 주문만 필터링합니다.
      * status가 null이면 모든 주문을 반환합니다.
+     *
+     * 최적화: JOIN FETCH와 배치 쿼리를 사용하여 N+1 문제 방지
      */
     @Transactional(readOnly = true)
     public List<OrderResponse> getStoreOrders(Long storeId, OrderStatus status) {
@@ -214,20 +220,24 @@ public class OrderService {
         storeRepository.findById(storeId)
                 .orElseThrow(() -> new BaseException(ErrorCode.STORE_NOT_FOUND));
 
-        // 주문 조회 (상태별 필터링 또는 전체)
+        // N+1 문제 해결: JOIN FETCH로 Store, User, OrderItems, Product를 함께 조회
         List<Order> orders;
         if (status != null) {
-            orders = orderRepository.findByStoreStoreIdAndStatus(storeId, status);
+            orders = orderRepository.findByStoreIdAndStatusWithDetails(storeId, status);
         } else {
-            orders = orderRepository.findAll().stream()
-                    .filter(order -> order.getStore().getStoreId().equals(storeId))
-                    .toList();
+            orders = orderRepository.findByStoreIdWithDetails(storeId);
         }
+
+        // N+1 문제 해결: 배치 쿼리로 모든 주문의 routeId를 한 번에 조회
+        List<Long> orderIds = orders.stream()
+                .map(Order::getOrderId)
+                .toList();
+        Map<Long, Long> routeIdMap = routeStopOrderRepository.findRouteIdsMapByOrderIds(orderIds);
 
         // OrderResponse로 변환
         return orders.stream()
                 .map(order -> {
-                    Long routeId = routeStopOrderRepository.findRouteIdByOrderId(order.getOrderId()).orElse(null);
+                    Long routeId = routeIdMap.get(order.getOrderId());
                     return OrderResponse.from(order, routeId);
                 })
                 .toList();
