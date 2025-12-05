@@ -1,5 +1,7 @@
 package backend.databaseproject.global.handler;
 
+import backend.databaseproject.domain.order.exception.OrderAlreadyProcessedException;
+import backend.databaseproject.domain.order.exception.OrderNotFoundException;
 import backend.databaseproject.global.common.BaseException;
 import backend.databaseproject.global.common.ErrorCode;
 import backend.databaseproject.global.common.ErrorResponse;
@@ -79,6 +81,28 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(ErrorCode.MISSING_REQUEST_PARAMETER,
                     e.getParameterName() + " 파라미터가 필요합니다."));
+    }
+
+    /**
+     * 주문을 찾을 수 없을 때
+     */
+    @ExceptionHandler(OrderNotFoundException.class)
+    protected ResponseEntity<ErrorResponse> handleOrderNotFoundException(OrderNotFoundException e) {
+        log.error("주문 조회 실패: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(ErrorCode.ORDER_NOT_FOUND, e.getMessage()));
+    }
+
+    /**
+     * 이미 처리된 주문일 때
+     */
+    @ExceptionHandler(OrderAlreadyProcessedException.class)
+    protected ResponseEntity<ErrorResponse> handleOrderAlreadyProcessedException(OrderAlreadyProcessedException e) {
+        log.error("주문 상태 오류: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(ErrorCode.ORDER_ALREADY_PROCESSED, e.getMessage()));
     }
 
     /**

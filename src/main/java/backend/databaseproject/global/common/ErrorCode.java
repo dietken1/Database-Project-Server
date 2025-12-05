@@ -39,6 +39,7 @@ public enum ErrorCode {
     ORDER_ALREADY_CANCELED(HttpStatus.BAD_REQUEST, "O003", "이미 취소된 주문입니다."),
     ORDER_ITEMS_EMPTY(HttpStatus.BAD_REQUEST, "O004", "주문 항목이 비어있습니다."),
     ORDER_TOTAL_WEIGHT_EXCEEDED(HttpStatus.BAD_REQUEST, "O005", "주문 총 무게가 드론 적재 한계를 초과했습니다."),
+    ORDER_ALREADY_PROCESSED(HttpStatus.CONFLICT, "O006", "이미 처리된 주문입니다."),
 
     // Drone Errors (6000번대)
     DRONE_NOT_FOUND(HttpStatus.NOT_FOUND, "D001", "존재하지 않는 드론입니다."),

@@ -222,16 +222,18 @@ public class StoreController {
     /**
      * 가게별 주문 목록 조회
      * 특정 가게에 들어온 주문들을 조회합니다.
-     * status 파라미터로 주문 상태를 필터링할 수 있습니다.
+     * 기본적으로 CREATED 상태(배송 대기 중)인 주문만 반환합니다.
+     * status 파라미터로 다른 상태의 주문도 조회할 수 있습니다.
      *
      * @param storeId 가게 ID
-     * @param status  주문 상태 필터 (선택)
+     * @param status  주문 상태 필터 (선택, 기본값: CREATED)
      * @return 주문 목록
      */
     @GetMapping("/{storeId}/orders")
     @Operation(
             summary = "가게별 주문 목록 조회",
-            description = "특정 가게에 들어온 주문들을 조회합니다. status 파라미터로 주문 상태를 필터링할 수 있습니다.",
+            description = "특정 가게에 들어온 주문들을 조회합니다. 기본적으로 CREATED 상태(배송 대기 중)인 주문만 반환합니다. " +
+                         "status 파라미터를 지정하면 다른 상태의 주문도 조회할 수 있습니다.",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
@@ -252,8 +254,8 @@ public class StoreController {
             @Parameter(name = "storeId", description = "가게 ID", required = true, example = "1")
             @PathVariable Long storeId,
 
-            @Parameter(name = "status", description = "주문 상태 필터 (CREATED, ASSIGNED, FULFILLED, CANCELED, FAILED)", example = "CREATED")
-            @RequestParam(required = false) OrderStatus status
+            @Parameter(name = "status", description = "주문 상태 필터 (기본값: CREATED)", example = "CREATED")
+            @RequestParam(required = false, defaultValue = "CREATED") OrderStatus status
     ) {
         List<OrderResponse> orders = orderService.getStoreOrders(storeId, status);
         return orders;

@@ -70,16 +70,18 @@ public class DeliveryBatchService {
         List<Order> orders = new ArrayList<>();
         for (Long orderId : orderIds) {
             Order order = orderRepository.findById(orderId)
-                    .orElseThrow(() -> new IllegalArgumentException("주문을 찾을 수 없습니다: " + orderId));
+                    .orElseThrow(() -> new backend.databaseproject.domain.order.exception.OrderNotFoundException(
+                            String.format("주문 ID %d를 찾을 수 없습니다.", orderId)));
             orders.add(order);
         }
 
         // 2. 모든 주문이 CREATED 상태인지 확인
         for (Order order : orders) {
             if (order.getStatus() != OrderStatus.CREATED) {
-                throw new IllegalArgumentException(
-                        String.format("주문 ID %d는 이미 처리되었거나 취소된 주문입니다. 현재 상태: %s",
-                                order.getOrderId(), order.getStatus()));
+                String statusMessage = getOrderStatusMessage(order.getStatus());
+                throw new backend.databaseproject.domain.order.exception.OrderAlreadyProcessedException(
+                        String.format("주문 ID %d는 %s 상태입니다. 배송을 시작할 수 없습니다.",
+                                order.getOrderId(), statusMessage));
             }
         }
 
@@ -532,5 +534,21 @@ public class DeliveryBatchService {
                 drone.getDroneId(), drone.getBatteryCapacity(), String.format("%.2f", maxDistance), String.format("%.2f", safeDistance));
 
         return safeDistance;
+    }
+
+    /**
+     * 주문 상태에 따른 한글 메시지 반환
+     *
+     * @param status 주문 상태
+     * @return 한글 메시지
+     */
+    private String getOrderStatusMessage(OrderStatus status) {
+        return switch (status) {
+            case CREATED -> "주문 생성됨";
+            case ASSIGNED -> "이미 배송이 시작됨";
+            case FULFILLED -> "이미 배송이 완료됨";
+            case CANCELED -> "취소된 주문";
+            case FAILED -> "배송 실패";
+        };
     }
 }
