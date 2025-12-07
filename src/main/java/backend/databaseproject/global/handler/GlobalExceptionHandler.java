@@ -1,5 +1,6 @@
 package backend.databaseproject.global.handler;
 
+import backend.databaseproject.domain.drone.exception.DroneNotAvailableException;
 import backend.databaseproject.domain.order.exception.OrderAlreadyProcessedException;
 import backend.databaseproject.domain.order.exception.OrderNotFoundException;
 import backend.databaseproject.global.common.BaseException;
@@ -103,6 +104,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of(ErrorCode.ORDER_ALREADY_PROCESSED, e.getMessage()));
+    }
+
+    /**
+     * 사용 가능한 드론이 없을 때
+     */
+    @ExceptionHandler(DroneNotAvailableException.class)
+    protected ResponseEntity<ErrorResponse> handleDroneNotAvailableException(DroneNotAvailableException e) {
+        log.error("드론 사용 불가: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(ErrorCode.DRONE_NOT_AVAILABLE, e.getMessage()));
     }
 
     /**

@@ -99,8 +99,8 @@ public class DeliveryBatchService {
 
         // 4. 사용 가능한 드론 조회
         Drone availableDrone = droneRepository.findFirstByStoreAndStatus(store, DroneStatus.IDLE)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        String.format("매장 '%s'에 사용 가능한 드론이 없습니다.", store.getName())));
+                .orElseThrow(() -> new backend.databaseproject.domain.drone.exception.DroneNotAvailableException(
+                        String.format("매장 '%s'에 사용 가능한 드론이 없습니다. 모든 드론이 배송 중이거나 사용 불가 상태입니다.", store.getName())));
 
         log.info("드론 할당 - DroneId: {}, Model: {}, MaxPayload: {}kg",
                 availableDrone.getDroneId(), availableDrone.getModel(), availableDrone.getMaxPayloadKg());

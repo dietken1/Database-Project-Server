@@ -40,6 +40,7 @@ public class DroneSimulatorService {
     private final SimpMessagingTemplate messagingTemplate;
     private final RouteStopProcessingService routeStopProcessingService;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
+    private final backend.databaseproject.domain.drone.repository.DroneRepository droneRepository;
 
     private static final int UPDATE_INTERVAL_MS = 2000; // 2초마다 업데이트
     private static final double DRONE_SPEED_KMH = 30.0; // 드론 평균 속도 30km/h
@@ -260,8 +261,12 @@ public class DroneSimulatorService {
                 log.info("Route 완료 - RouteId: {}", routeId);
 
                 // 드론 상태를 IDLE로 변경
-                drone.changeStatus(backend.databaseproject.domain.drone.entity.DroneStatus.IDLE);
-                log.info("드론 상태 변경 - DroneId: {}, Status: IDLE", drone.getDroneId());
+                backend.databaseproject.domain.drone.entity.Drone droneToUpdate =
+                    droneRepository.findById(drone.getDroneId())
+                        .orElseThrow(() -> new IllegalArgumentException("Drone not found: " + drone.getDroneId()));
+                droneToUpdate.changeStatus(backend.databaseproject.domain.drone.entity.DroneStatus.IDLE);
+                droneRepository.saveAndFlush(droneToUpdate);
+                log.info("드론 상태 변경 - DroneId: {}, Status: IDLE", droneToUpdate.getDroneId());
 
                 // FlightLog 생성
                 LocalDateTime flightEndTime = LocalDateTime.now();
