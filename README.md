@@ -1,101 +1,280 @@
-# 드론 배송 관리 시스템 (Drone Delivery Management System)
+# 드론 멀티배송 시스템 (Drone Multi-Delivery System)
 
-사용자 위치 기반 드론 배송 서비스의 백엔드 API 서버입니다.
+경로 최적화와 실시간 추적 기능을 갖춘 드론 멀티 배송 시스템
 
 ## 📋 프로젝트 개요
 
-이 프로젝트는 데모용 드론 배송 관리 시스템으로, 다음과 같은 기능을 제공합니다:
+최근 이커머스 시장의 폭발적인 성장으로 근거리 배송 수요가 급증하고 있습니다. 하지만 기존 운송 수단은 환경 오염, 인력 부족, 그리고 도심 교통 혼잡이라는 한계에 부딪혔습니다.
 
-- 사용자 위치 기반 주변 매장 조회
-- 매장별 카테고리 및 상품 조회
-- 장바구니 기반 주문 생성
-- 10분 단위 자동 배송 배치 처리
-- TSP 알고리즘을 이용한 경로 최적화
-- 드론 위치 실시간 시뮬레이션 및 추적
-- WebSocket을 통한 실시간 위치 정보 제공
+본 프로젝트는 이러한 문제를 해결하기 위한 드론 멀티 배송 시스템 프로토타입으로, 여러 주문을 하나의 비행 임무로 묶는 경로 최적화 로직과 배터리 및 적재 중량 제약을 고려한 현실적인 모델링, 그리고 주문부터 배송까지 전 과정을 추적하는 데이터베이스 구조를 구현했습니다.
+
+### 핵심 기능
+
+- **멀티 목적지 경로 최적화**: TSP 알고리즘 기반, 물품 하차에 따른 탑재 중량 변화 고려
+- **실시간 위치 추적**: WebSocket 기반 2초 단위 위치 업데이트
+- **데이터베이스 중심 설계**: 주문-배송-로그 전 과정 추적 가능
+- **배송 이력 보존**: 스냅샷 데이터 저장으로 과거 배송 경로 재현 가능
+
+## 🎯 프로젝트 목표
+
+1. **환경 친화적 배송**: 탄소 배출 감축을 위한 전기 드론 활용
+2. **배송 효율화**: 교통 체증 회피 및 인력 부족 해소
+3. **경로 최적화**: 여러 배송지를 효율적으로 묶어 비행 거리 최소화
+4. **실시간 모니터링**: 배송 과정 전체를 실시간으로 추적 및 관리
 
 ## 🛠 기술 스택
 
-- **Java**: 17
-- **Spring Boot**: 3.5.7
-- **Spring Data JPA**: ORM 및 데이터베이스 접근
-- **MySQL**: 8.x
-- **WebSocket (STOMP)**: 실시간 통신
-- **Swagger (SpringDoc OpenAPI)**: API 문서화
-- **Lombok**: 보일러플레이트 코드 감소
-- **Gradle**: 빌드 도구
+### 백엔드
+- **Java 17** - 최신 LTS 버전
+- **Spring Boot 3.5.7** - 백엔드 프레임워크
+- **Spring Data JPA** - ORM 및 데이터베이스 접근
+- **MySQL 8.x** - 관계형 데이터베이스
+- **WebSocket (STOMP)** - 실시간 양방향 통신
 
-## 📁 프로젝트 구조 (도메인 중심 설계)
+### 프론트엔드
+- **React** - UI 프레임워크
+- **Kakao Map API** - 지도 시각화
+- **SockJS + STOMP** - WebSocket 클라이언트
+
+### 개발 도구
+- **Gradle** - 빌드 도구
+- **Swagger (SpringDoc OpenAPI)** - API 문서화
+- **Lombok** - 보일러플레이트 코드 감소
+
+## 🏗 시스템 아키텍처
 
 ```
-src/main/java/backend/databaseproject/
-├── DroneDeliveryApplication.java        # 메인 애플리케이션
-├── global/                              # 전역 설정
-│   ├── common/                          # 공통 클래스
-│   │   ├── BaseResponse.java           # API 응답 표준 포맷
-│   │   ├── BaseException.java          # 커스텀 예외
-│   │   └── ErrorCode.java              # 에러 코드 정의
-│   ├── config/                          # 설정 클래스
-│   │   ├── SwaggerConfig.java
-│   │   ├── CorsConfig.java
-│   │   ├── WebSocketConfig.java
-│   │   └── SchedulerConfig.java
-│   ├── handler/
-│   │   └── GlobalExceptionHandler.java # 전역 예외 처리
-│   └── util/
-│       └── GeoUtils.java                # 지리 정보 유틸리티
-└── domain/                              # 도메인별 구조
-    ├── store/                           # 매장 도메인
-    │   ├── controller/
-    │   ├── service/
-    │   ├── repository/
-    │   ├── entity/
-    │   └── dto/
-    ├── product/                         # 상품 도메인
-    ├── customer/                        # 고객 도메인
-    ├── order/                           # 주문 도메인
-    ├── drone/                           # 드론 도메인
-    └── route/                           # 배송 경로 도메인
-        ├── controller/
-        ├── service/
-        │   ├── RouteService.java
-        │   ├── RouteOptimizerService.java    # TSP 경로 최적화
-        │   ├── DroneSimulatorService.java    # 드론 시뮬레이터
-        │   └── DeliveryBatchService.java     # 배치 처리
-        ├── scheduler/
-        │   └── DeliveryScheduler.java        # 10분 단위 스케줄러
-        ├── repository/
-        ├── entity/
-        └── dto/
+┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
+│                 │         │                 │         │                 │
+│  React Client   │◄───────►│  Spring Boot    │◄───────►│     MySQL       │
+│  (고객/점주 UI)  │  REST   │   Backend       │  JDBC   │   Database      │
+│                 │ WebSocket│                 │         │                 │
+└─────────────────┘         └─────────────────┘         └─────────────────┘
+        │                           │
+        │                           │
+        └───────────┬───────────────┘
+                    │
+            ┌───────▼────────┐
+            │                │
+            │ Drone Simulator│
+            │   (백엔드 내장)  │
+            │                │
+            └────────────────┘
+```
+
+## 📊 데이터베이스 설계
+
+### 주요 테이블 구조
+
+#### 1. 매장 & 상품 도메인
+- `store`: 매장 정보 (위치, 배송 반경)
+- `product`: 상품 정보 (무게, 카테고리)
+- `store_product`: 매장별 상품 재고 및 가격
+
+#### 2. 사용자 & 주문 도메인
+- `user`: 사용자 정보 (CUSTOMER, OWNER 역할)
+- `orders`: 주문 정보 (배송지 좌표 스냅샷 저장)
+- `order_item`: 주문 상세 품목
+
+#### 3. 드론 & 배송 도메인
+- `drone`: 드론 기체 정보 (배터리 용량, 최대 적재량)
+- `route`: 배송 임무 (계획/실제 거리, 시작/종료 시각)
+- `route_stop`: 경유지 정보 (순서, 상태, 도착/출발 시각)
+- `route_stop_order`: 경유지별 주문 매핑 (멀티배송 지원)
+
+#### 4. 로그 & 추적 도메인
+- `route_position`: 2초 단위 드론 위치 기록
+- `flight_log`: 비행 결과 요약 (거리, 배터리 사용량)
+
+### 멀티배송 모델링
+
+```sql
+-- 하나의 Route에 여러 RouteStop이 연결
+route (1) ──< (N) route_stop
+
+-- 하나의 RouteStop에서 여러 Order 처리 가능
+route_stop (1) ──< (N) route_stop_order >── (1) orders
+```
+
+### 정규화 전략
+
+- **3NF 준수**: 주문 헤더/상세, 임무/로그 분리로 중복 최소화
+- **의도적 반정규화**: 주문 시점 좌표를 `orders` 테이블에 저장하여 과거 배송 경로 재현 가능
+- **CASCADE 설정**: 부모 엔티티 삭제 시 자식 데이터 자동 삭제로 데이터 무결성 보장
+
+## 🚀 핵심 기능 상세
+
+### 1. 경로 최적화 (TSP 알고리즘)
+
+**Nearest Neighbor 휴리스틱** 사용:
+- 매장에서 출발하여 가장 가까운 배송지부터 순회
+- Haversine 공식으로 실제 지구 곡률 고려한 거리 계산
+- 물품 하차에 따른 무게 감소 반영
+
+```
+매장 → 배송지1 (최단거리) → 배송지2 (현재 위치에서 최단) → ... → 매장
+```
+
+### 2. 드론 시뮬레이터
+
+실제 드론 없이 백엔드 내부에서 비행 시뮬레이션:
+
+- **비동기 처리**: `@Async`로 별도 스레드에서 실행
+- **2초 단위 업데이트**: 선형 보간으로 부드러운 이동 구현
+- **배터리 소모 계산**: 거리와 탑재 중량에 비례한 배터리 감소
+- **실시간 DB 저장**: `route_position` 테이블에 전체 경로 기록
+
+### 3. WebSocket 실시간 통신
+
+**점주용 추적**:
+```javascript
+// Route ID로 전체 경로 추적
+stompClient.subscribe('/topic/route/{routeId}', callback);
+```
+
+**고객용 추적**:
+```javascript
+// Order ID로 자신의 주문만 추적
+stompClient.subscribe('/topic/order/{orderId}/position', callback);
+```
+
+### 4. 트랜잭션 관리
+
+각 경유지마다 독립적인 트랜잭션으로 **실시간 상태 업데이트**:
+
+```java
+// 메인 시뮬레이션 (전체 경로 관리)
+@Transactional(REQUIRES_NEW)
+simulateFlight()
+
+// 경유지별 처리 (즉시 커밋)
+RouteStopProcessingService.processStopArrival()
+  ├─> RouteStop 상태 업데이트 (ARRIVED → DEPARTED)
+  ├─> Order 상태 업데이트 (FULFILLED)
+  └─> flush() - 즉시 DB 반영
+```
+
+## 📡 주요 API 엔드포인트
+
+### 매장 조회
+```http
+GET /api/stores?lat=37.287234&lng=127.046789&radius=3.0
+```
+
+### 주문 생성
+```http
+POST /api/orders
+Content-Type: application/json
+
+{
+  "storeId": 1,
+  "userId": 1,
+  "items": [
+    { "productId": 1, "quantity": 2 },
+    { "productId": 2, "quantity": 1 }
+  ]
+}
+```
+
+### 배송 시작 (점주용)
+```http
+POST /api/routes/start-delivery
+Content-Type: application/json
+
+{
+  "orderIds": [1, 2, 3]
+}
+```
+
+### 드론 위치 조회
+```http
+GET /api/routes/{routeId}/current-position
+```
+
+## 🔑 핵심 SQL 쿼리
+
+### 1. 배송 대기 주문 조회
+```sql
+SELECT o.*
+FROM orders o
+WHERE o.store_id = ?
+  AND o.status = 'CREATED'
+ORDER BY o.created_at ASC;
+```
+
+### 2. 경로 정류장 순서대로 조회
+```sql
+SELECT * FROM route_stop
+WHERE route_id = ?
+ORDER BY stop_sequence ASC;
+```
+
+### 3. 배송 완료 처리 (트랜잭션)
+```sql
+-- 1. Route 상태 업데이트
+UPDATE route
+SET status = 'COMPLETED',
+    actual_end_at = NOW()
+WHERE route_id = ?;
+
+-- 2. FlightLog 생성
+INSERT INTO flight_log
+  (route_id, drone_id, start_time, end_time,
+   distance, battery_used, result)
+VALUES (?, ?, ?, NOW(), ?, ?, 'SUCCESS');
+```
+
+## 🎬 실행 흐름
+
+```
+1. 고객: 주문 생성 (status: CREATED)
+   └─> orders 테이블에 저장
+
+2. 점주: 주문 확인 및 배송 시작
+   ├─> 사용 가능한 IDLE 드론 조회
+   ├─> TSP 알고리즘으로 경로 최적화
+   ├─> route, route_stop 생성
+   └─> 드론 시뮬레이터 시작 (status: LAUNCHED)
+
+3. 드론 시뮬레이터:
+   ├─> 2초마다 위치 계산 및 DB 저장
+   ├─> WebSocket으로 실시간 브로드캐스트
+   ├─> 각 경유지 도착 시 주문 완료 처리
+   └─> 복귀 후 드론 상태 IDLE로 변경
+
+4. 배송 완료:
+   ├─> route.status = 'COMPLETED'
+   ├─> flight_log 생성
+   └─> 드론 재사용 가능
 ```
 
 ## 🚀 시작하기
 
-### 1. 데이터베이스 설정
+### 1. 환경 설정
 
-MySQL 데이터베이스를 생성하고 DDL을 실행하세요:
+**필수 요구사항:**
+- Java 17 이상
+- MySQL 8.x
+- Gradle 8.x
+
+### 2. 데이터베이스 설정
 
 ```sql
-CREATE DATABASE drone_delivery CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE drone_delivery;
-
--- 제공된 DDL 스크립트 실행
--- (store, product, store_product, customer, drone, delivery_request, ...)
+CREATE DATABASE drone_delivery
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 ```
 
-### 2. 환경 설정
-
-`src/main/resources/application.yml` 파일에서 데이터베이스 연결 정보를 수정하세요:
-
+`application.yml` 설정:
 ```yaml
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/drone_delivery?useSSL=false&serverTimezone=Asia/Seoul
+    url: jdbc:mysql://localhost:3306/drone_delivery
     username: root
-    password: your_password_here  # 본인의 MySQL 비밀번호로 변경
+    password: your_password
 ```
 
-### 3. 프로젝트 빌드 및 실행
+### 3. 애플리케이션 실행
 
 ```bash
 # 빌드
@@ -105,288 +284,67 @@ spring:
 ./gradlew bootRun
 ```
 
-또는 IDE에서 `DatabaseProjectApplication.java`를 직접 실행하세요.
+서버 실행 후 초기 데이터가 자동으로 로드됩니다 (`data.sql`).
 
 ### 4. API 문서 확인
-
-서버 실행 후 다음 주소에서 Swagger UI를 통해 API 문서를 확인할 수 있습니다:
 
 ```
 http://localhost:8080/swagger-ui.html
 ```
 
-## 📡 주요 API 엔드포인트
+## 📈 성능 최적화
 
-### 매장 관련 API
+### 인덱스 설계
 
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| GET | `/api/stores?lat={lat}&lng={lng}&radius={km}` | 주변 매장 조회 |
-| GET | `/api/stores/{storeId}/categories` | 매장 카테고리 목록 |
-| GET | `/api/stores/{storeId}/products?category={category}` | 매장 상품 목록 |
+| 테이블 | 인덱스 | 목적 |
+|--------|--------|------|
+| `orders` | `(store_id, status, created_at)` | 배송 대기 주문 조회 |
+| `drone` | `(store_id, status)` | 사용 가능 드론 검색 |
+| `route_stop` | `(route_id, stop_sequence)` | 경로 정류장 순회 |
+| `route_position` | `(route_id, ts DESC)` | 최근 위치 조회 |
 
-### 주문 관련 API
+### N+1 문제 해결
 
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| POST | `/api/orders` | 주문 생성 |
-| GET | `/api/orders/{orderId}` | 주문 조회 |
-
-### 배송 경로 관련 API
-
-| Method | Endpoint | 설명 |
-|--------|----------|------|
-| GET | `/api/routes/{routeId}` | 배송 경로 상세 조회 |
-| GET | `/api/routes/{routeId}/current-position` | 드론 현재 위치 조회 |
-| GET | `/api/routes/active` | 진행 중인 배송 목록 |
-
-## 🔄 WebSocket (실시간 드론 위치)
-
-### 연결 방법
-
-```javascript
-// SockJS + STOMP 사용
-const socket = new SockJS('http://localhost:8080/ws');
-const stompClient = Stomp.over(socket);
-
-stompClient.connect({}, function(frame) {
-    // 특정 경로의 드론 위치 구독
-    stompClient.subscribe('/topic/route/' + routeId, function(message) {
-        const position = JSON.parse(message.body);
-        console.log('드론 위치:', position);
-        // { lat: 37.123456, lng: 127.123456, ... }
-    });
-});
+**JOIN FETCH 활용**:
+```java
+@Query("SELECT o FROM Order o " +
+       "JOIN FETCH o.store " +
+       "JOIN FETCH o.user " +
+       "LEFT JOIN FETCH o.orderItems oi " +
+       "LEFT JOIN FETCH oi.product " +
+       "WHERE o.orderId = :orderId")
+Optional<Order> findByIdWithDetails(@Param("orderId") Long orderId);
 ```
 
-### 토픽 구조
+## 🏆 프로젝트 성과
 
-- `/topic/route/{routeId}`: 특정 배송 경로의 드론 실시간 위치
+### 기술적 의의
 
-## ⚙️ 핵심 기능 설명
+1. **멀티 목적지 경로 최적화**: TSP 알고리즘 + 탑재 중량 고려
+2. **실시간 추적 시스템**: WebSocket 기반 2초 단위 위치 업데이트
+3. **데이터 무결성 보장**: 트랜잭션 관리로 배송 상태 실시간 반영
+4. **확장 가능한 설계**: 충전소, 물류 허브 등 추가 경유지 확장 가능
 
-### 1. 10분 단위 배송 배치 처리
+### 한계 및 개선점
 
-`DeliveryScheduler`가 매 10분마다 다음 작업을 수행합니다:
+- **실제 하드웨어 미연동**: 드론 센서 데이터 실시간 수집 필요
+- **알고리즘 단순화**: 대규모 배송지는 유전 알고리즘 등 고급 기법 필요
+- **기상 정보 미반영**: 풍속, 강수 등 외부 환경 조건 고려 필요
 
-1. `CREATED` 상태의 주문들을 조회
-2. 매장별로 그룹화
-3. 각 그룹별로:
-   - 대기 중인 드론 할당
-   - 경로 최적화 (TSP 알고리즘)
-   - Route 및 RouteStop 생성
-   - 드론 시뮬레이터 시작
+## 🔮 향후 확장 방향
 
-### 2. 경로 최적화 (TSP)
+1. **실제 드론 연동**: DJI SDK, PX4 등 비행 컨트롤러 통합
+2. **고급 최적화**: 유전 알고리즘, Ant Colony 등 대규모 경로 최적화
+3. **동적 재조정**: 기상 정보, 교통 상황 반영한 실시간 경로 변경
+4. **충전 스테이션**: 배터리 부족 시 자동 충전소 경유
+5. **수요 예측 시스템**: 과거 데이터 기반 배송 수요 예측 및 사전 배치
 
-`RouteOptimizerService`가 Nearest Neighbor 휴리스틱을 사용하여:
+## 📚 참고 자료
 
-- 매장 → 배송지1 → 배송지2 → ... → 매장
-- 가장 짧은 경로를 계산
-- Haversine 공식으로 실제 거리 계산
+- [WebSocket 추적 가이드](docs/WEBSOCKET_TRACKING.md)
+- [API 문서](http://localhost:8080/swagger-ui.html)
+- [ER 다이어그램](docs/erd-diagram.png)
 
-### 3. 드론 시뮬레이터
+## 👥 팀 구성
 
-`DroneSimulatorService`가 비동기로 실행되며:
-
-- 각 구간을 선형 보간하여 2초마다 위치 업데이트
-- `route_position` 테이블에 저장
-- WebSocket으로 실시간 브로드캐스트
-- 각 정류장 도착 시 상태 업데이트
-
-### 4. 일관된 API 응답 형식
-
-모든 API는 `BaseResponse` 포맷을 사용합니다:
-
-**성공 응답:**
-```json
-{
-  "success": true,
-  "data": { ... },
-  "error": null
-}
-```
-
-**실패 응답:**
-```json
-{
-  "success": false,
-  "data": null,
-  "error": {
-    "code": "S001",
-    "message": "존재하지 않는 매장입니다."
-  }
-}
-```
-
-## 🧪 테스트 시나리오
-
-### 1. 주문 생성 테스트
-
-```bash
-# 1. 주변 매장 조회
-GET http://localhost:8080/api/stores?lat=37.5665&lng=126.9780&radius=5.0
-
-# 2. 매장의 카테고리 조회
-GET http://localhost:8080/api/stores/1/categories
-
-# 3. 특정 카테고리 상품 조회
-GET http://localhost:8080/api/stores/1/products?category=음료
-
-# 4. 주문 생성
-POST http://localhost:8080/api/orders
-Content-Type: application/json
-
-{
-  "storeId": 1,
-  "customerId": 1,
-  "items": [
-    {
-      "productId": 1,
-      "quantity": 2
-    },
-    {
-      "productId": 2,
-      "quantity": 1
-    }
-  ],
-  "note": "빠른 배송 부탁드립니다."
-}
-```
-
-### 2. 배송 추적 테스트
-
-```bash
-# 1. 진행 중인 배송 목록 조회
-GET http://localhost:8080/api/routes/active
-
-# 2. 특정 경로 상세 조회
-GET http://localhost:8080/api/routes/1
-
-# 3. 드론 현재 위치 조회
-GET http://localhost:8080/api/routes/1/current-position
-
-# 4. WebSocket으로 실시간 위치 스트리밍
-# (프론트엔드에서 구현)
-```
-
-## 🎯 데모 준비사항
-
-### 1. 초기 데이터 삽입
-
-데모를 위해 다음 데이터를 미리 삽입하세요:
-
-```sql
--- 매장 데이터
-INSERT INTO store (name, type, phone, address, lat, lng, delivery_radius_km, is_active) VALUES
-('세븐일레븐 강남점', 'CONVENIENCE', '02-1234-5678', '서울 강남구', 37.5000, 127.0300, 3.00, 1),
-('CU 홍대점', 'CONVENIENCE', '02-2345-6789', '서울 마포구', 37.5560, 126.9220, 2.50, 1);
-
--- 상품 데이터
-INSERT INTO product (name, category, unit_weight_kg, requires_verification, is_active) VALUES
-('콜라 500ml', '음료', 0.550, 0, 1),
-('삼각김밥', '식품', 0.120, 0, 1),
-('타이레놀', '의약품', 0.050, 1, 1);
-
--- 매장별 상품
-INSERT INTO store_product (store_id, product_id, price, stock_qty, max_qty_per_order, is_active) VALUES
-(1, 1, 1500, 100, 10, 1),
-(1, 2, 1200, 50, 5, 1);
-
--- 고객 데이터
-INSERT INTO customer (name, phone, address, lat, lng) VALUES
-('홍길동', '010-1234-5678', '서울 강남구 테헤란로', 37.5050, 127.0350),
-('김철수', '010-2345-6789', '서울 강남구 역삼동', 37.4980, 127.0280);
-
--- 드론 데이터
-INSERT INTO drone (model, battery_capacity, max_payload_kg, status) VALUES
-('DJI Matrice 300', 5935, 2.700, 'IDLE'),
-('DJI Phantom 4', 5870, 1.500, 'IDLE');
-```
-
-### 2. 프론트엔드 연동 가이드
-
-React 팀에게 전달할 정보:
-
-**API Base URL:**
-```
-http://localhost:8080
-```
-
-**CORS 설정:**
-- 허용된 Origin: `http://localhost:3000`, `http://localhost:5173`
-- 허용된 메서드: GET, POST, PUT, DELETE, PATCH, OPTIONS
-
-**WebSocket 연결:**
-```javascript
-const socket = new SockJS('http://localhost:8080/ws');
-const stompClient = Stomp.over(socket);
-```
-
-**필요한 라이브러리:**
-- `sockjs-client`
-- `@stomp/stompjs` 또는 `stompjs`
-
-**지도 API:**
-- 네이버 지도 API 또는 Kakao 지도 API 사용
-- 매장 및 드론 위치 마커 표시
-- 실시간 드론 경로 폴리라인 표시
-
-### 3. 상품 이미지 관리 방안
-
-프론트엔드 팀과 협의된 방안:
-
-**옵션 1: 외부 이미지 URL 사용 (추천)**
-```sql
--- product 테이블에 image_url 컬럼 추가
-ALTER TABLE product ADD COLUMN image_url VARCHAR(500) NULL;
-
--- 예시 데이터
-UPDATE product SET image_url = 'https://via.placeholder.com/300x300?text=Cola' WHERE product_id = 1;
-```
-
-**옵션 2: 서버 정적 파일 제공**
-```
-public/images/products/
-├── product_1.jpg
-├── product_2.jpg
-└── product_3.jpg
-
-접속: http://localhost:8080/images/products/product_1.jpg
-```
-
-## 📊 데이터베이스 ERD
-
-주요 테이블 관계:
-
-```
-store (매장)
-  ├── store_product (매장별 상품)
-  │   └── product (상품)
-  └── delivery_request (배송 요청)
-      ├── customer (고객)
-      ├── request_item (주문 항목)
-      └── route_stop_request
-          └── route_stop (경로 정류장)
-              └── route (배송 경로)
-                  ├── drone (드론)
-                  ├── route_position (위치 기록)
-                  └── flight_log (비행 로그)
-```
-
-## 🔧 트러블슈팅
-
-### 문제: 스케줄러가 실행되지 않음
-
-**해결:** `@EnableScheduling`이 활성화되어 있는지 확인하세요.
-- `SchedulerConfig.java`에 `@EnableScheduling` 추가됨
-
-### 문제: 드론 시뮬레이터가 작동하지 않음
-
-**해결:** `@EnableAsync`가 활성화되어 있는지 확인하세요.
-- `DatabaseProjectApplication.java`에 `@EnableAsync` 추가됨
-
-### 문제: WebSocket 연결 실패
-
-**해결:** CORS 설정을 확인하세요.
-- `WebSocketConfig.java`에서 `setAllowedOrigins()` 확인
+- **6조 - 드론 멀티배송 시스템 개발팀**
